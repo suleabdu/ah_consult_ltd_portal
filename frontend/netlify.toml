@@ -1,0 +1,162 @@
+[build]
+  publish = "."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Canonicalise every HTML page URL to an extensionless URL.
+[[redirects]]
+  from = "/index.html"
+  to = "/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/apply.html"
+  to = "/apply"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/student-login.html"
+  to = "/student-login"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/staff-login.html"
+  to = "/staff-login"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/staff-login-legacy.html"
+  to = "/staff-login-legacy"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/admin-register.html"
+  to = "/admin-register"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/setup-password.html"
+  to = "/setup-password"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/tutor.html"
+  to = "/tutor"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/admin-dashboard.html"
+  to = "/admin-dashboard"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/portal.html"
+  to = "/portal"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/payment-success.html"
+  to = "/payment-success"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/forgot-password.html"
+  to = "/forgot-password"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/reset-password.html"
+  to = "/reset-password"
+  status = 301
+  force = true
+
+# Resolve clean URLs to the existing static HTML files without changing the address bar.
+[[redirects]]
+  from = "/apply"
+  to = "/apply.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/student-login"
+  to = "/student-login.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/staff-login"
+  to = "/staff-login.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/staff-login-legacy"
+  to = "/staff-login-legacy.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/admin-register"
+  to = "/admin-register.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/setup-password"
+  to = "/setup-password.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/tutor"
+  to = "/tutor.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/admin-dashboard"
+  to = "/admin-dashboard.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/portal"
+  to = "/portal.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/payment-success"
+  to = "/payment-success.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/forgot-password"
+  to = "/forgot-password.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/reset-password"
+  to = "/reset-password.html"
+  status = 200
+  force = true
+

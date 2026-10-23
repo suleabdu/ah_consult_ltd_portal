@@ -1,0 +1,44 @@
+PHASE 13 VALIDATION REPORT
+==========================
+
+Static frontend gate
+---------------------
+PASS: scripts/phase13_frontend_audit.py
+- JavaScript source syntax: PASS
+- Inline JavaScript syntax: PASS
+- Internal extensionless route references: 0
+- Required route target files: PASS
+- Reported blank-page regression assertions: PASS
+- Continue/Back regression assertions: PASS
+
+Migration structure
+-------------------
+- Migration count: 23
+- Sequence: 001 through 023
+- Continuous sequence: PASS
+- Parenthesis structural check: PASS
+- Dollar-quote balance: PASS
+- Structural issues found: 0
+
+Static-host route smoke
+-----------------------
+Tested with Python SimpleHTTPServer (a representative static host without
+rewrite rules):
+- /                    -> 200
+- /apply.html          -> 200
+- /student-login.html  -> 200
+- /portal.html         -> 200
+- /404.html            -> 200
+- /apply               -> 404 (EXPECTED on a raw static server)
+
+This confirms the original /apply#signin symptom: the browser requests
+/apply from a raw static host, while the physical file is apply.html.
+Phase 13 therefore uses physical .html links internally, explicit Vercel
+rewrites, existing Netlify rewrites, and a GitHub/static-host 404 fallback.
+
+Live browser / Supabase E2E
+---------------------------
+NOT CLAIMED AS PASSED.
+A real pseudonym QA account and a staging deployment are required to execute
+browser/Auth/payment/tutor/admin/Sheets workflows safely. The Playwright
+harness is included under tests/e2e/ and is designed to run against staging.

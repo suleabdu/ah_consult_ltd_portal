@@ -1,0 +1,59 @@
+# AH Student Hub - local files and sensitive material
+# Environment files: keep only explicitly named example templates
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Private keys, Google credentials and OAuth tokens
+*.pem
+*.key
+*.p12
+*.pfx
+*.json.key
+**/client_secret*.json
+**/service-account*.json
+**/token.json
+**/credentials.json
+
+# Python environments and generated files
+venv/
+.venv/
+**/venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node/build output
+node_modules/
+**/node_modules/
+dist/
+build/
+coverage/
+
+# Supabase local metadata, logs and local secrets
+supabase/.temp/
+supabase/**/.temp/
+supabase/.env
+supabase/functions/.env
+supabase_logs*.csv
+*.log
+
+# Local notebooks, editor settings and OS metadata
+*.ipynb
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local configuration that might contain account-specific information
+backend/.env
+setup/client_secret.json
+setup/token.json

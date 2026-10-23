@@ -1,0 +1,125 @@
+/* AH STUDENT HUB — Phase 4 Minimal Academic Design System
+   Existing AH Consult palette retained: black + light gray + orange.
+   This layer is intentionally restrained: hierarchy, spacing, focus, cards,
+   tables, forms and responsive behaviour are upgraded without changing the brand.
+*/
+.ahds{
+  --ah-orange:#ea580c;
+  --ah-orange-2:#f97316;
+  --ah-orange-dark:#c2410c;
+  --ah-ink:#171717;
+  --ah-text:#27272a;
+  --ah-muted:#71717a;
+  --ah-line:#e4e4e7;
+  --ah-soft:#fafafa;
+  --ah-warm:#fff7ed;
+  --ah-success:#15803d;
+  --ah-danger:#b91c1c;
+  --ah-radius:14px;
+  --ah-radius-sm:10px;
+  --ah-shadow:0 1px 2px rgba(0,0,0,.03),0 8px 30px rgba(17,24,39,.035);
+  --ah-focus:0 0 0 3px rgba(234,88,12,.16);
+  background:#f6f6f5;
+  color:var(--ah-text);
+  -webkit-font-smoothing:antialiased;
+}
+.ahds :focus-visible{outline:none;box-shadow:var(--ah-focus);border-color:var(--ah-orange)!important}
+.ahds button,.ahds a,.ahds input,.ahds select,.ahds textarea{transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease}
+.ahds .top{height:62px;padding:0 20px;background:#111;color:#fff;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 2px 16px rgba(0,0,0,.08)}
+.ahds .top img{height:36px;width:auto;border-radius:8px;background:#fff;padding:3px}
+.ahds .org{font-size:12px;letter-spacing:.07em}
+.ahds .top button{border:1px solid rgba(255,255,255,.1);background:#1f1f1f;border-radius:9px;padding:8px 11px}
+.ahds .top button:hover{background:#292929}
+.ahds .shell{grid-template-columns:248px minmax(0,1fr)}
+.ahds nav{padding:18px 12px;background:#fff;border-right:1px solid var(--ah-line)}
+.ahds nav .cap{margin:12px 10px 6px;color:#a1a1aa;font-size:10px;letter-spacing:.12em}
+.ahds nav button{min-height:42px;padding:10px 12px;border-radius:10px;color:#3f3f46}
+.ahds nav button:hover{background:#fafafa;color:#18181b}
+.ahds nav button.act{background:#fff7ed;color:var(--ah-orange-dark);box-shadow:inset 3px 0 0 var(--ah-orange)}
+.ahds nav .b{background:var(--ah-orange);min-width:22px;text-align:center}
+.ahds main{max-width:1480px;width:100%;padding:28px 30px 42px}
+.ahds h1{font-size:1.45rem;line-height:1.2;letter-spacing:-.025em;text-transform:none;margin-bottom:5px}
+.ahds h2{letter-spacing:-.02em}
+.ahds .sub{font-size:13.5px;line-height:1.6;color:var(--ah-muted)}
+.ahds .cards{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:22px}
+.ahds .card{border:1px solid var(--ah-line);border-radius:var(--ah-radius);padding:18px;background:#fff;box-shadow:var(--ah-shadow)}
+.ahds .card:hover{transform:translateY(-1px);box-shadow:0 10px 32px rgba(17,24,39,.055)}
+.ahds .card small{font-size:10px;letter-spacing:.1em;color:#a1a1aa}
+.ahds .card b{font-size:1.7rem;letter-spacing:-.035em;margin-top:5px;color:#18181b}
+.ahds .card.o b{color:var(--ah-orange)}
+.ahds .panel,.ahds .item{border:1px solid var(--ah-line);border-radius:var(--ah-radius);background:#fff;box-shadow:var(--ah-shadow);padding:18px}
+.ahds .panel{margin-bottom:18px}
+.ahds .panel h3{font-size:12px;letter-spacing:.08em;color:#52525b;margin-bottom:12px}
+.ahds .row{gap:9px;margin-top:12px}
+.ahds .grid{gap:12px}
+.ahds .btn{min-height:40px;padding:9px 15px;border-radius:10px;background:var(--ah-orange);font-weight:700;box-shadow:none}
+.ahds .btn:hover{background:var(--ah-orange-dark);transform:translateY(-1px)}
+.ahds .btn.g{background:#fff;color:#27272a;border-color:#d4d4d8}
+.ahds .btn.g:hover{background:#fafafa;border-color:#a1a1aa}
+.ahds .btn.r{background:#fff7f7;color:var(--ah-danger);border-color:#fecaca}
+.ahds .btn.d{background:#b91c1c}
+.ahds .in,.ahds textarea,.ahds select,.ahds .tools input,.ahds .tools select{min-height:42px;border:1px solid #d4d4d8;border-radius:10px;background:#fff;color:#27272a}
+.ahds textarea{min-height:92px;resize:vertical}
+.ahds label.f{font-size:11px;color:#52525b;letter-spacing:.02em;margin-top:12px}
+.ahds .tw{border:1px solid var(--ah-line);border-radius:var(--ah-radius);box-shadow:var(--ah-shadow)}
+.ahds table{font-size:13px}
+.ahds th{background:#18181b;padding:12px 14px;font-size:10px;letter-spacing:.1em}
+.ahds td{padding:12px 14px;border-top:1px solid #f0f0f1}
+.ahds tr.cl:hover td{background:#fffaf5}
+.ahds .pill{padding:4px 9px;font-size:10.5px;letter-spacing:.01em}
+.ahds .notice{border-radius:11px;padding:13px 15px}
+.ahds .toast{border-radius:11px;box-shadow:0 12px 36px rgba(0,0,0,.16)}
+.ahds .mdl{background:rgba(24,24,27,.58);backdrop-filter:blur(4px)}
+.ahds .mbox{border-radius:16px;border:1px solid rgba(0,0,0,.06);box-shadow:0 24px 70px rgba(0,0,0,.18);padding:24px}
+.ahds .photo{border-color:#fdba74}
+.ahds .profile-preview,.ahds .status-card,.ahds .who{background:#fffaf5;border-color:#fed7aa;border-radius:var(--ah-radius)}
+.ahds .chips span{background:#fff7ed;color:var(--ah-orange-dark);border:1px solid #fed7aa;padding:3px 9px}
+.ahds .bar i{background:#ffedd5;height:10px}.ahds .bar s{background:var(--ah-orange)}
+.ahds .qrow{position:relative;border-left:3px solid #fed7aa}
+.ahds .qrow:hover{border-left-color:var(--ah-orange)}
+.ahds .opt{border:1px solid #e4e4e7!important;border-radius:9px!important;padding:9px 11px!important;background:#fff}
+.ahds .opt:hover{background:#fffaf5;border-color:#fed7aa!important}
+.ahds footer{padding:22px;color:#a1a1aa}
+/* Application/auth experience */
+.ahds .authbox{border:1px solid var(--ah-line)!important;border-radius:18px!important;box-shadow:0 18px 55px rgba(17,24,39,.08)!important}
+.ahds .hero{border-right:1px solid rgba(255,255,255,.08)}
+.ahds .hero .hbrand{letter-spacing:-.01em}
+.ahds .steps3 li{border-radius:10px!important;background:rgba(255,255,255,.07)!important;border:1px solid rgba(255,255,255,.08)!important}
+.ahds .steps3 li b{background:var(--ah-orange)!important}
+.ahds .stepper .on,.ahds .stepper .done{color:var(--ah-orange)!important}
+.ahds .stepper .line.on{background:var(--ah-orange)!important}
+.ahds .cta,.ahds button.cta{border-radius:10px!important;background:var(--ah-orange)!important}
+.ahds .cta:hover{background:var(--ah-orange-dark)!important}
+.ahds .input-light,.ahds .authbox input,.ahds .authbox select,.ahds .authbox textarea{border-radius:10px!important}
+/* Landing/status surfaces */
+.ahds .status-card{box-shadow:var(--ah-shadow)}
+.ahds .profile-head{box-shadow:var(--ah-shadow)}
+.ahds .status-photo{border:1px solid var(--ah-line)}
+/* Touch and small screens */
+@media(max-width:900px){
+  .ahds .top{height:58px;padding:0 12px}
+  .ahds .shell{grid-template-columns:1fr}
+  .ahds nav{top:58px!important}
+  .ahds main{padding:20px 15px 32px}
+  .ahds .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:600px){
+  .ahds .cards{grid-template-columns:1fr 1fr;gap:9px}
+  .ahds .card{padding:14px}
+  .ahds .card b{font-size:1.4rem}
+  .ahds .panel,.ahds .item{padding:14px;border-radius:12px}
+  .ahds .tools{display:grid;grid-template-columns:1fr}
+  .ahds .tools input,.ahds .tools select{width:100%}
+  .ahds .btn{min-height:42px}
+}
+@media(max-width:420px){.ahds .cards{grid-template-columns:1fr}.ahds .top .org{display:none}}
+@media(prefers-reduced-motion:reduce){.ahds *{scroll-behavior:auto!important;transition:none!important;animation:none!important}.ahds .card:hover,.ahds .btn:hover{transform:none}}
+
+/* Phase 13 — high-visibility controls and reliable wizard navigation */
+.ahds .top-action{display:inline-flex!important;align-items:center;justify-content:center;gap:6px;min-height:38px!important;border:1px solid rgba(253,186,116,.55)!important;background:#1f1f1f!important;color:#fff!important;border-radius:10px!important;padding:7px 11px!important;font-weight:800!important}
+.ahds .top-action:hover{background:#292929!important;border-color:#fb923c!important}
+.ahds .profile-action .av{background:#fb923c!important;color:#111827!important;box-shadow:0 0 0 2px rgba(251,146,60,.25)}
+.ahds .top-signout{border:1px solid rgba(253,186,116,.55)!important;background:#1f1f1f!important;color:#fff!important}
+.ahds .nav2{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:20px}
+.ahds .nav2 button{width:auto!important;min-width:130px!important;margin-top:0!important}
+@media(max-width:600px){.ahds .top-action span{display:none}.ahds .top-action{min-width:40px;padding:7px 9px!important}.ahds .nav2{position:sticky;bottom:0;background:#fff;padding:10px 0;border-top:1px solid var(--ah-line);z-index:10}.ahds .nav2 button{flex:1;min-width:0!important}}

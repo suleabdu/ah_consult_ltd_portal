@@ -1,0 +1,19 @@
+code,name,category,fee_ngn,is_active
+ACAD1,AutoCAD,Beginner,20000,true
+ACAD2,AutoCAD,Intermediate,30000,true
+ACAD3,AutoCAD,Professional,60000,true
+GRD1,Graphic Design,Beginner,20000,true
+GRD2,Graphic Design,Intermediate,30000,true
+GRD3,Graphic Design,Professional,60000,true
+LSF1,Lumion/Animation,Beginner,20000,true
+LSF2,Lumion/Animation,Intermediate,30000,true
+LSF3,Lumion/Animation,Professional,60000,true
+PLN1,ArchiCAD,Beginner,20000,true
+PLN2,ArchiCAD,Intermediate,30000,true
+PLN3,ArchiCAD,Professional,60000,true
+RVT1,Revit,Beginner,20000,true
+RVT2,Revit,Intermediate,30000,true
+RVT3,Revit,Professional,60000,true
+SKT1,SketchUp,Beginner,20000,true
+SKT2,SketchUp,Intermediate,30000,true
+SKT3,SketchUp,Professional,60000,true

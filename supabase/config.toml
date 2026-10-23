@@ -1,0 +1,14 @@
+[functions.sheet-review]
+verify_jwt = false
+
+[functions.admin-register]
+verify_jwt = false
+
+[functions.payment-webhook]
+verify_jwt = false
+
+[functions.upperlink-webhook]
+verify_jwt = false
+
+[functions.sheet-sync]
+verify_jwt = true

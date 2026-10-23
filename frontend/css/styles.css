@@ -1,0 +1,126 @@
+/* =============================================================================
+   css/styles.css
+   AH Student Hub — shared visual identity for every page in this project.
+   Ported from the original Apps Script project's Styles.html (included
+   there via <?!= include('Styles') ?>). Linked from every page's <head>
+   here instead, alongside the same Tailwind CDN script tag and Google
+   Font the original used, so the look is unchanged.
+   ============================================================================= */
+
+body {
+  font-family: 'Roboto', sans-serif;
+  background-color: #f3f4f6;
+  color: #1f2937;
+  margin: 0;
+}
+
+.theme-accent {
+  color: #f97316;
+}
+
+.theme-bg-accent {
+  background-color: #f97316;
+}
+
+.theme-border {
+  border-color: #f97316;
+}
+
+.input-light {
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  color: #111827;
+}
+
+.input-light:focus {
+  border-color: #f97316;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
+}
+
+.hidden-step {
+  display: none !important;
+}
+
+.loader {
+  border-top-color: #f97316;
+  animation: spinner 1.5s linear infinite;
+}
+
+@keyframes spinner {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* --- PRINT LAYOUT (Application Portal's receipt page; a harmless no-op
+   on every other page since these IDs don't exist there).
+
+   BUG FIX vs. the original Styles.html: the original's print rules hid
+   #page-0..#page-3 and showed "#page-4" as the receipt — but Index.html
+   only ever included 4 stage divs (#page-0 Intake, #page-1 Application,
+   #page-2 Payment, #page-3 Receipt); there was never a #page-4, so
+   printing silently produced a blank page. Fixed here to show #page-3. */
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+
+  html, body {
+    background-color: #ffffff !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #app-wrapper {
+    display: block !important;
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: none !important;
+  }
+
+  .hero-bg, #main-app-header, .print-hide {
+    display: none !important;
+  }
+
+  .main-container {
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    position: static !important;
+    top: 0 !important;
+    left: 0 !important;
+  }
+
+  #page-0, #page-1, #page-2 {
+    display: none !important;
+  }
+
+  #page-3 {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 13px !important;
+    page-break-inside: avoid;
+  }
+
+  .print-shadow-none {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+
+  #page-3 table {
+    page-break-inside: avoid;
+  }
+}

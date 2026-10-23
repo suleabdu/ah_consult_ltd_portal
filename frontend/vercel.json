@@ -1,0 +1,18 @@
+{
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/apply", "destination": "/apply.html" },
+    { "source": "/student-login", "destination": "/student-login.html" },
+    { "source": "/staff-login", "destination": "/staff-login.html" },
+    { "source": "/staff-login-legacy", "destination": "/staff-login-legacy.html" },
+    { "source": "/admin-register", "destination": "/admin-register.html" },
+    { "source": "/setup-password", "destination": "/setup-password.html" },
+    { "source": "/tutor", "destination": "/tutor.html" },
+    { "source": "/admin-dashboard", "destination": "/admin-dashboard.html" },
+    { "source": "/portal", "destination": "/portal.html" },
+    { "source": "/payment-success", "destination": "/payment-success.html" },
+    { "source": "/forgot-password", "destination": "/forgot-password.html" },
+    { "source": "/reset-password", "destination": "/reset-password.html" }
+  ]
+}
