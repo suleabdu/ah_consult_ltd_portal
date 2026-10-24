@@ -37,10 +37,18 @@ function ahctSetupSheet() {
 }
 
 function ahctCall(payload) {
+  const body = JSON.stringify(payload);
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const requestId = Utilities.getUuid().replace(/-/g, '');
+  const signingText = ts + '.' + requestId + '.' + body;
+  const bytes = Utilities.computeHmacSha256Signature(signingText, ahctSecret_());
+  const signature = bytes.map(function(b) { return ('0' + ((b + 256) % 256).toString(16)).slice(-2); }).join('');
   const res = UrlFetchApp.fetch(AHCT.SUPABASE_URL + '/functions/v1/sheet-review', {
-    method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { 'x-sheet-secret': ahctSecret_() }, payload: JSON.stringify(payload) });
-  let body = {}; try { body = JSON.parse(res.getContentText()); } catch (x) { body = { error: res.getContentText().slice(0, 120) }; }
-  return { code: res.getResponseCode(), body: body };
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { 'x-sheet-timestamp': ts, 'x-sheet-request-id': requestId, 'x-sheet-signature': signature }, payload: body
+  });
+  let parsed = {}; try { parsed = JSON.parse(res.getContentText()); } catch (x) { parsed = { error: res.getContentText().slice(0, 120) }; }
+  return { code: res.getResponseCode(), body: parsed };
 }
 
 function ahctDiagnose() {   // run any time to see why approvals are not reaching the portal

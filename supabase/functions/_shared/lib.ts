@@ -50,7 +50,7 @@ export const safe = (fn: (req: Request) => Promise<Response>) => async (req: Req
   if (req.method === "OPTIONS") return new Response("ok", { headers: h });
   let res: Response;
   try { res = await fn(req); }
-  catch (e) { console.error("FUNCTION ERROR:", e); res = json({ error: "Something went wrong on our side. Please try again.", detail: e instanceof Error ? e.message : String(e) }, 500); }
+  catch (e) { const requestId = crypto.randomUUID(); console.error("FUNCTION ERROR", requestId, e); res = json({ error: "Something went wrong on our side. Please try again.", request_id: requestId }, 500); }
   const out = new Headers(res.headers); for (const [k, v] of Object.entries(h)) out.set(k, v);
   return new Response(res.body, { status: res.status, headers: out });
 };

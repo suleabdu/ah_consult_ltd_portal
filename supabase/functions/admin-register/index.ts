@@ -51,9 +51,9 @@ Deno.serve(safe(async (req) => {
   if (!/^\S+@\S+\.\S+$/.test(mail)) return json({ error: "Enter a valid email address." }, 422);
   if (String(password ?? "").length < 10) return json({ error: "Use a password of at least 10 characters." }, 422);
   const { data: created, error } = await db.auth.admin.createUser({ email: mail, password, email_confirm: true, user_metadata: { full_name: name, phone } });
-  if (error) return json({ error: /already|registered/i.test(error.message) ? "This email is already registered. Use a different email or sign in." : "Could not create the account.", detail: error.message }, 400);
+  if (error) return json({ error: /already|registered/i.test(error.message) ? "This email is already registered. Use a different email or sign in." : "Could not create the account." }, 400);
   const { error: e2 } = await db.from("staff").insert({ id: created.user.id, full_name: name, email: mail, phone: phone ?? null, position: position ?? null, role, status: "pending" });
-  if (e2) { await db.auth.admin.deleteUser(created.user.id); console.error("staff insert failed", e2); return json({ error: "Could not save your registration. Please try again.", detail: e2.message }, 500); }
+  if (e2) { await db.auth.admin.deleteUser(created.user.id); console.error("staff insert failed", e2); return json({ error: "Could not save your registration. Please try again." }, 500); }
   if (dbOk === true) await db.rpc("redeem_access_code", { p_hash: hash, p_role: role, p_consume: true });   // count the use only after success
   await kickSheetSync();
   return json({ ok: true });

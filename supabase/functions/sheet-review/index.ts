@@ -1,52 +1,31 @@
-/* =============================================================================
-   SETUP GUIDE  -  supabase/functions/sheet-review/index.ts
-=============================================================================
-WHAT IT IS
-   Called by the Google Sheet (Apps Script) when someone changes the Approved / Rejected / Pending dropdown, for payments and for staff approvals.
-
-WHERE THIS FILE GOES
-   supabase/functions/sheet-review/index.ts
-   The file MUST be named index.ts. Its folder name (sheet-review) is the function name.
-   Run every command below from the PROJECT ROOT (the folder that CONTAINS the "supabase" folder).
-   Its helpers live in supabase/functions/_shared/ (lib.ts, crypto.ts, pay.ts). Keep that folder exactly there.
-
-ONE-TIME PREPARATION (skip if already done)
-   supabase login
-   supabase link --project-ref YOUR_PROJECT_REF      (the part of your project URL before .supabase.co)
-
-DEPLOY
-   supabase functions deploy sheet-review --no-verify-jwt
-   (--no-verify-jwt lets outside services call it. You can instead set verify_jwt = false for it in supabase/config.toml.)
-   "Docker is not running"? Start Docker Desktop, or update the Supabase CLI and add  --use-api  to the command.
-
-SECRETS NEEDED   (supabase secrets set NAME=value   or   Dashboard > Edge Functions > Secrets)
-   SHEET_WEBHOOK_SECRET (the same value stored as SHEET_WEBHOOK_SECRET in Apps Script Script Properties).
-
-DATABASE NEEDED
-   Migrations 003 to 008.
-
-HOW TO TEST
-   In Apps Script run ahctDiagnose: the server line must say OK.
-
-COMMON PROBLEMS
-   401 Unauthorized = the Apps Script SHEET_WEBHOOK_SECRET property does not match Supabase Secrets.
-   ============================================================================= */
-
-// Called by the Google Sheet (Apps Script) when staff change the "Payment Review" dropdown.
 import { admin, json, safe } from "../_shared/lib.ts";
+import { hmacSha256Hex } from "../_shared/crypto.ts";
 import { kickSheetSync } from "../_shared/sync.ts";
+const MAX_CLOCK_SKEW_SECONDS = 300;
 Deno.serve(safe(async (req) => {
-  if (req.headers.get("x-sheet-secret") !== Deno.env.get("SHEET_WEBHOOK_SECRET")) return json({ error: "Unauthorized" }, 401);
-  const { applicationId, staffId, kind, decision, by } = await req.json();
-  console.log("sheet-review called:", applicationId, decision, by);
-  if (applicationId === "TEST") return json({ message: "Connection and secret are OK." });
-  if (!["pending", "approved", "rejected"].includes(decision)) return json({ error: "Use Pending, Approved or Rejected." }, 400);
+  if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
+  const secret = Deno.env.get("SHEET_WEBHOOK_SECRET") ?? "";
+  const timestamp = req.headers.get("x-sheet-timestamp") ?? "";
+  const requestId = req.headers.get("x-sheet-request-id") ?? "";
+  const signature = req.headers.get("x-sheet-signature") ?? "";
+  if (!secret || !timestamp || !requestId || !signature) return json({ error: "Unauthorized." }, 401);
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts) || Math.abs(Math.floor(Date.now() / 1000) - ts) > MAX_CLOCK_SKEW_SECONDS) return json({ error: "Request expired." }, 401);
+  if (!/^[A-Za-z0-9_-]{12,120}$/.test(requestId)) return json({ error: "Invalid request id." }, 400);
+  const raw = await req.text();
+  const expected = await hmacSha256Hex(secret, `${timestamp}.${requestId}.${raw}`);
+  if (signature.length !== expected.length || !timingSafeEqual(signature.toLowerCase(), expected)) return json({ error: "Unauthorized." }, 401);
   const db = admin();
-  if (kind === "admin") { // staff approval from the "Admin Registrations" tab
-    if (!["pending", "approved", "rejected"].includes(decision)) return json({ error: "Use Pending, Approved or Rejected." }, 400);
+  const { error: replay } = await db.from("sheet_webhook_events").insert({ request_id: requestId, payload_sha256: await hmacSha256Hex("payload", raw) });
+  if (replay) { if (replay.code === "23505") return json({ error: "Duplicate request." }, 409); throw replay; }
+  let body: any; try { body = JSON.parse(raw); } catch { return json({ error: "Invalid JSON." }, 400); }
+  const { applicationId, staffId, kind, decision, by } = body ?? {};
+  if (applicationId === "TEST") return json({ message: "Connection and signature are OK." });
+  if (!['pending', 'approved', 'rejected'].includes(decision)) return json({ error: "Use Pending, Approved or Rejected." }, 400);
+  if (kind === "admin") {
     const { data: st } = await db.from("staff").select("id,full_name").eq("id", staffId).maybeSingle();
     if (!st) return json({ error: "Staff record not found." }, 404);
-    await db.from("staff").update({ status: decision }).eq("id", staffId);
+    const { error } = await db.from("staff").update({ status: decision }).eq("id", staffId); if (error) throw error;
     await db.from("audit_log").insert({ actor_name: by ?? "sheet", action: "staff_" + decision, target: st.full_name });
     await kickSheetSync();
     return json({ message: `${st.full_name} is now ${decision}.` + (decision === "approved" ? " They can sign in to the dashboard." : "") });
@@ -55,12 +34,11 @@ Deno.serve(safe(async (req) => {
   if (!app) return json({ error: "Application not found." }, 404);
   if (app.status !== "pending_payment") return json({ error: `This application is already '${app.status}'. Payment review is closed.` }, 409);
   if (decision === "approved") {
-    await db.from("payments").upsert({ application_id: app.id, reference: "MANUAL-" + app.pay_reference, expected_ngn: app.total_ngn, paid_ngn: app.total_ngn, raw_event: { source: "sheet", by } }, { onConflict: "reference" });
-    await db.from("applications").update({ status: "paid", paid_at: new Date().toISOString(), payment_review: "approved" }).eq("id", app.id);
-    await kickSheetSync();
-    return json({ message: "Approved. The applicant's form is now unlocked." });
+    const { error: paymentError } = await db.from("payments").upsert({ application_id: app.id, reference: "MANUAL-" + app.pay_reference, expected_ngn: app.total_ngn, paid_ngn: app.total_ngn, raw_event: { source: "sheet", by } }, { onConflict: "reference" }); if (paymentError) throw paymentError;
+    const { error } = await db.from("applications").update({ status: "paid", paid_at: new Date().toISOString(), payment_review: "approved" }).eq("id", app.id); if (error) throw error;
+    await kickSheetSync(); return json({ message: "Approved. The applicant's form is now unlocked." });
   }
-  await db.from("applications").update({ payment_review: decision }).eq("id", app.id);
-  await kickSheetSync();
-  return json({ message: decision === "rejected" ? "Rejected. The applicant will be asked to check and resubmit." : "Set back to pending." });
+  const { error } = await db.from("applications").update({ payment_review: decision }).eq("id", app.id); if (error) throw error;
+  await kickSheetSync(); return json({ message: decision === "rejected" ? "Rejected. The applicant will be asked to check and resubmit." : "Set back to pending." });
 }));
+function timingSafeEqual(a: string, b: string) { if (a.length !== b.length) return false; let out = 0; for (let i=0;i<a.length;i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i); return out === 0; }

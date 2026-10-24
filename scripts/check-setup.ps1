@@ -2,7 +2,7 @@
 $files = @('supabase/functions/_shared/lib.ts','supabase/functions/_shared/crypto.ts','supabase/functions/_shared/pay.ts','supabase/functions/_shared/sync.ts')
 $fns = 'create-application','cancel-application','submit-application','admin-register','admin-delete','admin-settings','verify-payment','payment-webhook','upperlink-webhook','sheet-sync','sheet-review','admin-sync'
 $fns | ForEach-Object { $files += "supabase/functions/$_/index.ts" }
-(1..11) | ForEach-Object { $n = '{0:d3}' -f $_; if (-not (Get-ChildItem supabase/migrations -Filter "${n}_*.sql" -ErrorAction SilentlyContinue)) { $files += "supabase/migrations/${n}_*.sql" } }
+(1..24) | ForEach-Object { $n = '{0:d3}' -f $_; if (-not (Get-ChildItem supabase/migrations -Filter "${n}_*.sql" -ErrorAction SilentlyContinue)) { $files += "supabase/migrations/${n}_*.sql" } }
 $bad = $false
 foreach ($f in $files) {
   if (Test-Path $f) { Write-Host "OK       $f" -ForegroundColor Green }

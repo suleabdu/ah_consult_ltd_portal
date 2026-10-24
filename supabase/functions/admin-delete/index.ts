@@ -61,7 +61,7 @@ Deno.serve(safe(async (req) => {
     await db.from("sheet_outbox").delete().eq("application_id", id).eq("done", false);
     await db.from("sheet_outbox").insert({ application_id: id, kind: "delete_app" });
     const { error } = await db.from("applications").delete().eq("id", id);
-    if (error) return json({ error: "The database refused the deletion.", detail: error.message }, 500);
+    if (error) return json({ error: "The database refused the deletion." }, 500);
     let accountDeleted = false;
     if (deleteAccount) {
       const { count } = await db.from("applications").select("id", { count: "exact", head: true }).eq("user_id", a.user_id);
@@ -84,7 +84,7 @@ Deno.serve(safe(async (req) => {
     await db.from("sheet_outbox").delete().eq("application_id", id).eq("kind", "staff").eq("done", false);
     await db.from("sheet_outbox").insert({ application_id: id, kind: "delete_staff" });
     const { error } = await db.auth.admin.deleteUser(id);   // staff row is removed by cascade
-    if (error) return json({ error: "Could not delete the account.", detail: error.message }, 500);
+    if (error) return json({ error: "Could not delete the account." }, 500);
     kick(); return json({ ok: true });
   }
   return json({ error: "Unknown request." }, 400);

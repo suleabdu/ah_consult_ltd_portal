@@ -1,19 +1,5 @@
-# setup/
+# Setup
 
-Contains `get_refresh_token.py` — a one-time, local-only script that
-authorizes this app to act as your own Google account (instead of a
-service account) for Sheets/Drive access.
+This folder contains only deployment-safe configuration templates. Real Supabase, Google, payment and webhook secrets must be created in the relevant provider dashboards and must never be committed.
 
-**Full instructions:** see `docs/SETUP_GUIDE.md`, Steps 2–4.
-
-Quick version, once you've downloaded `client_secret.json` from Google
-Cloud Console into this folder (Step 2 of the guide):
-
-```bash
-cd setup
-pip install -r requirements.txt
-python get_refresh_token.py
-```
-
-Nothing in this folder is deployed to Render or Netlify — it's a
-throwaway local step. `client_secret.json` is git-ignored; never commit it.
+See `SUPABASE_FUNCTION_SECRETS.example.txt` and `docs/DEPLOYMENT.md`.
