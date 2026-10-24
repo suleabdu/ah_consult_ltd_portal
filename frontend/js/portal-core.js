@@ -30,30 +30,10 @@
     var staff = null;
     if (o.role === "tutor") {
       var s = await sb.from("staff").select("*").eq("id", session.user.id).maybeSingle(); staff = s.data;
-      if (!staff || staff.status !== "approved" || staff.role !== "tutor") {
-        try { await sb.auth.signOut({ scope: "local" }); } catch (e) { console.warn("Could not sign out an unapproved tutor session:", e); }
-        clearLocalAuthToken();
-        location.replace(o.loginUrl);
-        return null;
-      }
+      var lr = await sb.from("lecturers").select("id,is_active").eq("user_id", session.user.id).maybeSingle();
+      if (!staff || staff.status !== "approved" || staff.role !== "tutor" || !lr.data || !lr.data.is_active) { await sb.auth.signOut(); location.replace(o.loginUrl + '?deactivated=1'); return null; }
     }
-    function clearLocalAuthToken() {
-      try { var ref = new URL(C.SUPABASE_URL).hostname.split(".")[0]; localStorage.removeItem("sb-" + ref + "-auth-token"); } catch (e) { console.warn("Could not clear local auth storage:", e); }
-    }
-    var out = async function (expired) {
-      try {
-        var result = await sb.auth.signOut({ scope: "local" });
-        if (result && result.error) console.warn("Supabase sign-out returned an error:", result.error.message);
-      } catch (e) {
-        console.warn("Supabase sign-out failed; clearing this browser session locally:", e);
-      } finally {
-        clearLocalAuthToken();
-        var parts = String(o.loginUrl || "apply.html#signin").split("#"), target = parts[0];
-        if (expired) target += (target.indexOf("?") > -1 ? "&" : "?") + "expired=1";
-        if (parts[1]) target += "#" + parts[1];
-        location.replace(target);
-      }
-    };
+    var out = async function (expired) { await sb.auth.signOut(); location.replace(o.loginUrl + (expired ? (o.loginUrl.indexOf("?") > -1 ? "&" : "?") + "expired=1" : "")); };
     var idle; var bump = function () { clearTimeout(idle); idle = setTimeout(function () { out(true); }, 30 * 60 * 1000); };
     ["click", "keydown", "touchstart", "mousemove"].forEach(function (e) { addEventListener(e, bump, { passive: true }); }); bump();
     return { sb: sb, user: session.user, staff: staff, signOut: out };
@@ -62,7 +42,7 @@
   // Page frame + navigation. render(id) returns HTML; wire(id, main) attaches events.
   function shell(o) {
     var root = document.getElementById("root"), cur = o.start;
-    root.innerHTML = '<header class="top"><button id="burger" type="button" aria-label="Open menu">☰</button><img class="lg" alt="" src="https://lh3.googleusercontent.com/d/1Qp_nbC6oekgdzjJqGBHwHw125t1ABYUf" onerror="this.style.display=\'none\'"><span class="org" data-org>AH Consult</span><span class="sp"></span><span class="me">' + esc(o.who) + '</span><a href="/" style="color:#fdba74;text-decoration:none;font-size:12.5px;font-weight:700">Website</a><button id="so" type="button" class="top-signout">Sign out</button></header>' +
+    root.innerHTML = '<header class="top"><button id="burger" aria-label="Menu">&#9776;</button><img class="lg" alt="" src="https://lh3.googleusercontent.com/d/1Qp_nbC6oekgdzjJqGBHwHw125t1ABYUf" onerror="this.style.display=\'none\'"><span class="org" data-org>AH Consult</span><span class="sp"></span><span class="me">' + esc(o.who) + '</span><a href="index.html" style="color:#fdba74;text-decoration:none;font-size:12.5px;font-weight:700">Website</a><button id="so">Sign out</button></header>' +
       '<div class="shell"><nav id="nav"></nav><main id="main"></main></div><footer>&copy; ' + new Date().getFullYear() + " AH Consult Ltd &middot; " + esc(o.footer || "") + "</footer>";
     var nav = document.getElementById("nav"), main = document.getElementById("main");
     function paintNav() { nav.innerHTML = '<div class="cap">' + esc(o.cap) + "</div>" + o.nav().map(function (n) { return '<button data-v="' + n[0] + '" class="' + (n[0] === cur ? "act" : "") + '">' + n[2] + " " + esc(n[1]) + (n[3] ? '<span class="b">' + n[3] + "</span>" : "") + "</button>"; }).join(""); nav.querySelectorAll("button").forEach(function (b) { b.onclick = function () { go(b.dataset.v); nav.classList.remove("open"); }; }); }
