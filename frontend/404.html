@@ -7,10 +7,9 @@
   (function(){
     var map={
       '/apply':'/apply.html','/student-login':'/student-login.html','/staff-login':'/staff-login.html',
-      '/staff-login-legacy':'/staff-login-legacy.html','/admin-register':'/admin-register.html',
-      '/setup-password':'/setup-password.html','/tutor':'/tutor.html','/admin-dashboard':'/admin-dashboard.html',
+      '/admin-register':'/admin-register.html',
+      '/tutor':'/tutor.html','/admin-dashboard':'/admin-dashboard.html',
       '/portal':'/portal.html','/payment-success':'/payment-success.html','/forgot-password':'/forgot-password.html',
-      '/reset-password':'/reset-password.html'
     };
     var target=map[location.pathname.replace(/\/$/,'')];
     if(target){ location.replace(target+location.search+location.hash); return; }

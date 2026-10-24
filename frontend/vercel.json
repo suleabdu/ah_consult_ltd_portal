@@ -1,18 +1,73 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin-allow-popups"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains"
+        }
+      ]
+    }
+  ],
   "rewrites": [
-    { "source": "/apply", "destination": "/apply.html" },
-    { "source": "/student-login", "destination": "/student-login.html" },
-    { "source": "/staff-login", "destination": "/staff-login.html" },
-    { "source": "/staff-login-legacy", "destination": "/staff-login-legacy.html" },
-    { "source": "/admin-register", "destination": "/admin-register.html" },
-    { "source": "/setup-password", "destination": "/setup-password.html" },
-    { "source": "/tutor", "destination": "/tutor.html" },
-    { "source": "/admin-dashboard", "destination": "/admin-dashboard.html" },
-    { "source": "/portal", "destination": "/portal.html" },
-    { "source": "/payment-success", "destination": "/payment-success.html" },
-    { "source": "/forgot-password", "destination": "/forgot-password.html" },
-    { "source": "/reset-password", "destination": "/reset-password.html" }
+    {
+      "source": "/apply",
+      "destination": "/apply.html"
+    },
+    {
+      "source": "/student-login",
+      "destination": "/student-login.html"
+    },
+    {
+      "source": "/staff-login",
+      "destination": "/staff-login.html"
+    },
+    {
+      "source": "/admin-register",
+      "destination": "/admin-register.html"
+    },
+    {
+      "source": "/tutor",
+      "destination": "/tutor.html"
+    },
+    {
+      "source": "/admin-dashboard",
+      "destination": "/admin-dashboard.html"
+    },
+    {
+      "source": "/portal",
+      "destination": "/portal.html"
+    },
+    {
+      "source": "/payment-success",
+      "destination": "/payment-success.html"
+    },
+    {
+      "source": "/forgot-password",
+      "destination": "/forgot-password.html"
+    }
   ]
 }
