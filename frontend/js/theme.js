@@ -37,7 +37,7 @@
     if (b.favicon) { var l = document.querySelector("link[rel~=icon]"); if (!l) { l = document.createElement("link"); l.rel = "icon"; document.head.appendChild(l); } l.href = b.favicon; }
     if (b.org) document.querySelectorAll("[data-org]").forEach(function (e) { e.textContent = b.org; });
     if (im.hero) document.querySelectorAll("img[data-slot=hero]").forEach(function (i) { i.src = im.hero; });
-    if (im.auth) document.querySelectorAll(".hero").forEach(function (h) { h.style.backgroundImage = "linear-gradient(180deg,rgba(17,24,39,.55),rgba(17,24,39,.85)),url('" + im.auth + "')"; });
+    if (im.auth) document.querySelectorAll("body.ahds .hero").forEach(function (h) { h.style.backgroundImage = "linear-gradient(180deg,rgba(17,24,39,.55),rgba(17,24,39,.85)),url('" + im.auth + "')"; });
     document.querySelectorAll("[data-img]").forEach(function (card) {
       var u = im[card.getAttribute("data-img")], ex = card.querySelector(":scope > .theme-card-img");
       if (!u) { if (ex) ex.remove(); return; }

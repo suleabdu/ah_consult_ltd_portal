@@ -1,0 +1,24 @@
+{
+  "name": "ahct-sms-hub",
+  "version": "18.6.1",
+  "private": true,
+  "description": "AH Student Hub - static frontend + Supabase backend. Node is only needed to rebuild vendored assets; deployment itself needs no build.",
+  "scripts": {
+    "build": "npm run build:vendor",
+    "build:vendor": "esbuild scripts/vendor/supabase-entry.js --bundle --minify --platform=browser --format=iife --global-name=supabase --outfile=frontend/vendor/supabase.min.js && esbuild scripts/vendor/xlsx-entry.js --bundle --minify --platform=browser --format=iife --outfile=frontend/vendor/read-excel-file.min.js",
+    "validate": "python3 scripts/validate.py",
+    "lint:pages": "node scripts/lint-pages.mjs",
+    "test:unit": "node tests/unit/passport-compress.test.mjs && node tests/unit/course-preselect.test.mjs && node tests/unit/critical-regressions.test.mjs && node tests/unit/homepage.dom.test.mjs && node tests/unit/admin-gallery.dom.test.mjs && node tests/unit/v18_1_account_and_deletion.test.mjs && node tests/unit/v18_2_workflows.test.mjs && node tests/unit/v18_3_document_and_transition.test.mjs && node tests/unit/v18_5_document_studio.test.mjs && node tests/unit/v18_6_age_receipts_admin.test.mjs && node tests/unit/asset-extraction.test.mjs",
+    "check": "npm run validate && npm run lint:pages && npm run test:unit",
+    "test:browser": "node tests/browser/homepage.browser.mjs",
+    "configure:frontend": "node scripts/configure-frontend.mjs"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "2.45.4",
+    "esbuild": "0.24.2",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "jsdom": "^25.0.1",
+    "read-excel-file": "5.8.5"
+  }
+}

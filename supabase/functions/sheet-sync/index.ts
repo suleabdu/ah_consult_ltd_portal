@@ -1,37 +1,3 @@
-/* =============================================================================
-   SETUP GUIDE  -  supabase/functions/sheet-sync/index.ts
-=============================================================================
-WHAT IT IS
-   Copies applications and staff registrations to the Google Sheet and removes deleted rows. Includes a protected diagnostic mode.
-
-WHERE THIS FILE GOES
-   supabase/functions/sheet-sync/index.ts
-   The file MUST be named index.ts. Its folder name (sheet-sync) is the function name.
-   Run every command below from the PROJECT ROOT (the folder that CONTAINS the "supabase" folder).
-   Its helpers live in supabase/functions/_shared/ (lib.ts, crypto.ts, pay.ts). Keep that folder exactly there.
-
-ONE-TIME PREPARATION (skip if already done)
-   supabase login
-   supabase link --project-ref YOUR_PROJECT_REF      (the part of your project URL before .supabase.co)
-
-DEPLOY
-   supabase functions deploy sheet-sync
-   (JWT verification is enabled. Only an approved administrator or trusted server-side call may run it.)
-   "Docker is not running"? Start Docker Desktop, or update the Supabase CLI and add  --use-api  to the command.
-
-SECRETS NEEDED   (supabase secrets set NAME=value   or   Dashboard > Edge Functions > Secrets)
-   SHEET_ID (the long code in the sheet address); GOOGLE_SERVICE_ACCOUNT_B64 (base64 of the new service-account key). Optional SHEET_TAB and ADMIN_TAB.
-
-DATABASE NEEDED
-   Migrations 003, 005, 007 and 008.
-
-HOW TO TEST
-   Use the signed-in Admin Dashboard sync control for a protected run. Do not put secrets in query strings or browser URLs.
-
-COMMON PROBLEMS
-   The checklist says what to fix (share the sheet with the service account email, enable the Sheets API, wrong SHEET_ID, damaged key).
-   ============================================================================= */
-
 // Outbox -> Google Sheets (one-way mirror).
 // Normal run:  POST /functions/v1/sheet-sync (JWT + handler authorization required)
 // Self-test:   GET       /functions/v1/sheet-sync?check=1   (authorized administrator/service role only)
@@ -131,9 +97,15 @@ Deno.serve(async (req) => {
   if (!authorized) return json({ error: "Unauthorized. Use an approved administrator account." }, 401);
   if (url.searchParams.get("check") === "1") return json(await diagnose(db));
   let jobs: any[] = [];
+  // Declared OUTSIDE the try block: the catch below needs it. (Previously it was block-scoped inside try, so a batch-level
+  // failure crashed the error handler itself, jobs were never marked failed or retried, and callers got a raw 500.)
+  const failedJob = async (id: number, message: string) => {
+    const r = await db.rpc("fail_sheet_job", { p_id: id, p_error: message.slice(0, 1000), p_max_attempts: 8 });
+    if (r.error) console.error(`Could not mark sync job ${id} failed`, r.error.message);
+  };
   try {
     const worker = `sheet-sync-${crypto.randomUUID()}`;
-    const r = await db.rpc("claim_sheet_jobs", { p_worker: worker, p_limit: 25 });
+    const r = await db.rpc("claim_sheet_jobs", { p_worker: worker, p_limit: 5 });
     if (r.error) throw new Error(`Could not claim synchronization jobs: ${r.error.message}`);
     jobs = r.data ?? [];
     if (!jobs.length) return json({ synced: 0, failed: 0, note: "nothing pending" });
@@ -146,10 +118,6 @@ Deno.serve(async (req) => {
     const done = async (id: number, note?: string) => {
       const r = await db.rpc("complete_sheet_job", { p_id: id, p_note: note ?? null });
       if (r.error) throw new Error(`Could not complete sync job ${id}: ${r.error.message}`);
-    };
-    const failedJob = async (id: number, message: string) => {
-      const r = await db.rpc("fail_sheet_job", { p_id: id, p_error: message.slice(0, 1000), p_max_attempts: 8 });
-      if (r.error) console.error(`Could not mark sync job ${id} failed`, r.error.message);
     };
     for (const j of jobs) {
       try {

@@ -15,7 +15,7 @@ test.describe('AH Student Hub — critical student path', () => {
   });
 
   test('source routes resolve without 404', async ({ request }) => {
-    for (const path of ['/apply.html#signin', '/student-login.html', '/portal.html', '/forgot-password.html']) {
+    for (const path of ['/apply.html#signin', '/student-login.html', '/portal.html', '/forgot-password.html', '/reset-password.html']) {
       const r = await request.get(new URL(path, base).toString());
       expect(r.status(), path).toBe(200);
     }

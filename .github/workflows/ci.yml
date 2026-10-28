@@ -1,0 +1,71 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions: { contents: read }
+concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
+
+jobs:
+  secret-scan:
+    name: Gitleaks — full Git history and checkout
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  static:
+    name: Static release gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: python3 scripts/validate.py
+      - name: Undefined-name lint (catches calls to functions that were never defined)
+        run: npm run lint:pages
+      - name: Frontend unit tests
+        run: npm run test:unit
+
+  edge-functions:
+    name: Edge Functions (type-check + unit tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - name: Type-check every function
+        working-directory: supabase/functions
+        run: for d in */; do d=${d%/}; [ "$d" = _shared ] && continue; echo "check $d"; deno check "$d/index.ts"; done
+      - name: Unit tests
+        working-directory: supabase/functions
+        run: deno test --no-check _shared/
+
+  database:
+    name: Migrations + SQL tests (PostgreSQL 16)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and start PostgreSQL
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql postgresql-contrib
+          sudo service postgresql start
+          sudo -u postgres psql -c "create role runner superuser login" -c "create database hub_test owner runner"
+      - run: tests/sql/ci_extension_stubs.sh
+      - name: Apply every migration and run all SQL tests
+        run: DATABASE_URL="postgres:///hub_test?host=/var/run/postgresql" ./scripts/test-sql.sh
+
+  frontend-build:
+    name: Vendored assets are up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - name: Fail if committed assets differ from a clean build
+        run: git diff --exit-code -- frontend/vendor

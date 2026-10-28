@@ -1,37 +1,3 @@
-/* =============================================================================
-   SETUP GUIDE  -  supabase/functions/admin-settings/index.ts
-=============================================================================
-WHAT IT IS
-   Administrator-only server function behind Payment Methods and staff access codes: saves payment methods (keys encrypted), tests connections, creates and revokes access codes.
-
-WHERE THIS FILE GOES
-   supabase/functions/admin-settings/index.ts
-   The file MUST be named index.ts. Its folder name (admin-settings) is the function name.
-   Run every command below from the PROJECT ROOT (the folder that CONTAINS the "supabase" folder).
-   Its helpers live in supabase/functions/_shared/ (lib.ts, crypto.ts, pay.ts). Keep that folder exactly there.
-
-ONE-TIME PREPARATION (skip if already done)
-   supabase login
-   supabase link --project-ref YOUR_PROJECT_REF      (the part of your project URL before .supabase.co)
-
-DEPLOY
-   supabase functions deploy admin-settings
-   (Normal deploy. Signed-in users reach it with their login token.)
-   "Docker is not running"? Start Docker Desktop, or update the Supabase CLI and add  --use-api  to the command.
-
-SECRETS NEEDED   (supabase secrets set NAME=value   or   Dashboard > Edge Functions > Secrets)
-   SETTINGS_ENCRYPTION_KEY (REQUIRED; see supabase/functions/_shared/crypto.ts for how to create it).
-
-DATABASE NEEDED
-   Migrations 008 and 010.
-
-HOW TO TEST
-   Dashboard > Payment Methods > Add payment method > Save, then Test. Also Team & Access > Create code.
-
-COMMON PROBLEMS
-   "SETTINGS_ENCRYPTION_KEY secret is not set" = set that secret and try again (no redeploy needed).  "Only administrators..." = sign in as an Administrator.
-   ============================================================================= */
-
 // Administrator-only: payment methods (secrets encrypted), staff access codes.
 import { admin, json, safe, userFrom } from "../_shared/lib.ts";
 import { encryptText, sha256Hex } from "../_shared/crypto.ts";

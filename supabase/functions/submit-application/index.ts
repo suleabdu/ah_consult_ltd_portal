@@ -1,37 +1,3 @@
-/* =============================================================================
-   SETUP GUIDE  -  supabase/functions/submit-application/index.ts
-=============================================================================
-WHAT IT IS
-   Validates the application form (including education, occupation, skills and laptop questions) and assigns the Student ID.
-
-WHERE THIS FILE GOES
-   supabase/functions/submit-application/index.ts
-   The file MUST be named index.ts. Its folder name (submit-application) is the function name.
-   Run every command below from the PROJECT ROOT (the folder that CONTAINS the "supabase" folder).
-   Its helpers live in supabase/functions/_shared/ (lib.ts, crypto.ts, pay.ts). Keep that folder exactly there.
-
-ONE-TIME PREPARATION (skip if already done)
-   supabase login
-   supabase link --project-ref YOUR_PROJECT_REF      (the part of your project URL before .supabase.co)
-
-DEPLOY
-   supabase functions deploy submit-application
-   (Normal deploy. Signed-in users reach it with their login token.)
-   "Docker is not running"? Start Docker Desktop, or update the Supabase CLI and add  --use-api  to the command.
-
-SECRETS NEEDED   (supabase secrets set NAME=value   or   Dashboard > Edge Functions > Secrets)
-   None.
-
-DATABASE NEEDED
-   Migrations 001 to 004.
-
-HOW TO TEST
-   Pay (or approve the payment), complete the form and submit. A Student ID like AHCT2610NNNN appears.
-
-COMMON PROBLEMS
-   "Payment has not been confirmed yet" = the application status is not paid yet.
-   ============================================================================= */
-
 // Final step: validate form + passport, assign Student ID, mark 'submitted'.
 import { admin, json, safe, userFrom } from "../_shared/lib.ts";
 import { kickSheetSync } from "../_shared/sync.ts";
@@ -42,7 +8,10 @@ Deno.serve(safe(async (req) => {
   if (!form?.surname?.trim()) e.surname = "Enter your surname.";
   if (!form?.firstName?.trim()) e.firstName = "Enter your first name.";
   if (!/^(\+234|0)[789][01]\d{8}$/.test((form?.phone ?? "").replace(/\s/g, ""))) e.phone = "Enter a valid Nigerian phone number.";
-  if (!form?.dob) e.dob = "Enter your date of birth.";
+  const dob=String(form?.dob||'');
+  const birthday=/^\d{4}-\d{2}-\d{2}$/.test(dob)?new Date(dob+'T00:00:00Z'):new Date(NaN);
+  const today=new Date(),cutoff=new Date(Date.UTC(today.getUTCFullYear()-16,today.getUTCMonth(),today.getUTCDate()));
+  if(!Number.isFinite(birthday.getTime())||birthday.toISOString().slice(0,10)!==dob||birthday>cutoff) e.dob="Applicants must be at least 16 years old. Enter a valid date of birth.";
   if (!form?.gender) e.gender = "Select your gender.";
   if (!form?.address?.trim()) e.address = "Enter your address.";
   if (!form?.state) e.state = "Select your state.";
@@ -61,8 +30,14 @@ Deno.serve(safe(async (req) => {
   if (app.status === "submitted") return json({ studentId: app.student_id }); // idempotent
   if (app.status !== "paid") return json({ error: "Payment has not been confirmed yet." }, 402);
   if (!passportPath.startsWith(`${user.id}/${app.id}/`)) return json({ error: "Invalid passport file." }, 400);
-  const { data: id } = await db.rpc("next_student_id", { p_intake: app.intake_id });
-  await db.from("applications").update({ status: "submitted", form_data: form, passport_path: passportPath, student_id: id, submitted_at: new Date().toISOString() }).eq("id", app.id);
-  await kickSheetSync();
+  // One transactional RPC performs allocation, validation and update atomically.
+  const { data: id, error: finalizeError } = await db.rpc("finalize_paid_application", {
+    p_app: app.id, p_form: form, p_passport: passportPath
+  });
+  if (finalizeError) {
+    console.error("Finalization failed", finalizeError.message);
+    return json({ error: "Your application could not be finalized. No additional student ID was issued. Please retry or contact admissions." }, 409);
+  }
+  await kickSheetSync().catch((error) => console.error("Sheet sync scheduled after submission", error));
   return json({ studentId: id });
 }));

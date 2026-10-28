@@ -9,7 +9,7 @@ export async function kickSheetSync(): Promise<{ ok: boolean; status?: number; d
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: "{}",
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(45000),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {

@@ -1,0 +1,32 @@
+import {source as pageSource} from './source.mjs';
+import assert from 'node:assert/strict';
+import {readFileSync,existsSync} from 'node:fs';
+const R=p=>readFileSync(new URL('../../'+p,import.meta.url),'utf8');
+const sql=R('supabase/migrations/030_v18_2_workflows_security_documents.sql');
+const admin=pageSource('frontend/admin-dashboard.html');
+const apply=pageSource('frontend/apply.html');
+const doc=R('frontend/js/official-documents.js');
+const home=R('frontend/js/home.js');
+const vercel=JSON.parse(R('frontend/vercel.json'));
+const sync=R('supabase/functions/admin-sync/index.ts');
+const worker=R('supabase/functions/sheet-sync/index.ts');
+const renderer=R('supabase/functions/student-document/index.ts');
+const asrt=(condition,msg)=>assert.ok(condition,msg);
+for(const name of ['admission-letter','deferment-letter','payment-receipt','result','transcripts']){
+ asrt(!existsSync(new URL('../../frontend/'+name+'.html',import.meta.url)),'Redundant document page removed: '+name);
+ asrt(vercel.redirects.some(x=>x.source==='/'+name),'Compatibility redirect for '+name);
+}
+for(const key of ['location','locAddress','locState','locLga','locCity','locGps','locMap','locPublish'])asrt(admin.includes(key),'Office location admin field '+key);
+asrt(home.includes('publishedLocation'),'Published public address');
+for(const key of ['allApps','app-check','runBulk','admin_issue_result_statements','admin_issue_academic_records','admin_ensure_admission_document'])asrt(admin.includes(key),'Bulk action '+key);
+for(const key of ['correct_rejected_application','verify-payment','appOfficialDocs','AHOfficialDocuments.renderList'])asrt(apply.includes(key),'Applicant workflow '+key);
+for(const key of ['admin_delete_nonadmitted','application_erasure_register','update public.payments set application_id=null','document_key=\'payment_receipt\'','for update'])asrt(sql.includes(key),'Transaction-safe non-admitted deletion '+key);
+asrt(sql.includes('where id=p_application and user_id=auth.uid() for update'),'Owner-scoped correction');
+asrt(sql.includes('security invoker'),'Public aggregate RPCs run without privileged EXECUTE');
+asrt(/create or replace function public.public_homepage_metrics\(\) returns jsonb\s+language sql stable security invoker/.test(sql),'Homepage metrics RPC is security invoker');
+for(const key of ['published_at is not null','grading_model <> \'needs_review\'','drop policy if exists assessment_attempts_own'])asrt(sql.includes(key),'Grade privacy '+key);
+asrt(doc.includes('result_statement')&&doc.includes('payment_receipt'),'Official client supports result and receipt PDF keys');
+asrt(renderer.includes('requestedKey !== key'),'Student-issued PDF ID and type verified');
+asrt(worker.includes('p_limit: 5'),'Shorter worker batches reduce lock duration');
+asrt(sync.includes('action === "diagnose"'),'Protected worker diagnostics');
+console.log('V18.2 workflow, document, admin, security and homepage checks: PASS');

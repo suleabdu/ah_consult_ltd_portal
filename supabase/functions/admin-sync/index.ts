@@ -9,7 +9,25 @@ Deno.serve(safe(async (req) => {
   if (!staff || staff.status !== "approved" || staff.role !== "administrator") {
     return json({ error: "Only an approved administrator can run the Sheet sync." }, 403);
   }
-  const result = await kickSheetSync();
-  if (!result.ok) return json({ ok: false, error: "The sync worker could not complete the request. Check the sync status and Edge Function logs." }, 502);
-  return json({ ok: true, message: `Sync worker completed: ${Number(result.data?.synced ?? 0)} row(s) synced, ${Number(result.data?.failed ?? 0)} failed.`, result: result.data });
+  const payload = await req.json().catch(() => ({}));
+  if (payload.action === "diagnose") {
+    const base = Deno.env.get("SUPABASE_URL"), service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!base || !service) return json({error:"Required Supabase server secrets are missing."},503);
+    try {
+      const r = await fetch(base.replace(/\/$/, "")+"/functions/v1/sheet-sync?check=1", {
+        headers: { Authorization: "Bearer " + service, apikey: service },
+        signal: AbortSignal.timeout(20000)
+      });
+      const result = await r.json().catch(() => ({}));
+      if (!r.ok) return json({error:result.error||"Worker connection failed (HTTP "+r.status+"). Review sheet-sync Edge Function logs."},502);
+      return json({all_ok:result.all_ok,steps:result.steps,pending_jobs:result.pending_jobs});
+    } catch (e) { console.error("sheet-sync diagnostics failed",e);return json({error:"Sheet-sync diagnostics could not reach the worker. Check function deployment, secrets and execution logs."},502); }
+  }
+  const work = kickSheetSync().then(result => {
+    if (!result.ok) console.error("Manual sheet-sync worker request failed", result.status, result.error);
+  }).catch(e => console.error("Manual sheet-sync dispatch failed", e));
+  // @ts-ignore EdgeRuntime is provided by the Supabase Edge runtime.
+  if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(work);
+  else await work;
+  return json({ ok: true, queued: true, message: "Synchronization requested. Refresh the status to see completed and failed jobs." }, 202);
 }));

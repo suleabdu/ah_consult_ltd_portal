@@ -1,19 +1,8 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AH Consult | Redirecting…</title></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AH Consult | Redirecting…</title><link rel="icon" href="https://lh3.googleusercontent.com/d/1Qp_nbC6oekgdzjJqGBHwHw125t1ABYUf">
+</head>
 <body style="font-family:Arial,sans-serif;background:#f3f4f6;color:#111827;padding:48px 20px;text-align:center">
   <h1 style="font-size:20px">Opening AH Consult Student Hub…</h1>
   <p id="m">Please wait.</p>
-  <script>
-  (function(){
-    var map={
-      '/apply':'/apply.html','/student-login':'/student-login.html','/staff-login':'/staff-login.html',
-      '/admin-register':'/admin-register.html',
-      '/tutor':'/tutor.html','/admin-dashboard':'/admin-dashboard.html',
-      '/portal':'/portal.html','/payment-success':'/payment-success.html','/forgot-password':'/forgot-password.html',
-    };
-    var target=map[location.pathname.replace(/\/$/,'')];
-    if(target){ location.replace(target+location.search+location.hash); return; }
-    document.getElementById('m').textContent='The requested page could not be found.';
-  })();
-  </script>
+  <script src="js/pages/404.js"></script>
 </body></html>

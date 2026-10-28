@@ -1,4 +1,4 @@
-# Phase 13 — pseudonym end-to-end browser test
+# Pseudonym end-to-end browser test
 
 This folder is the live-browser test harness. It is intentionally separate from the static audit.
 

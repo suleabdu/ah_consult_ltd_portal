@@ -57,3 +57,16 @@ Thumbs.db
 backend/.env
 setup/client_secret.json
 setup/token.json
+
+# Node (only used to rebuild frontend/vendor and frontend/css/tailwind.css; built outputs ARE committed)
+node_modules/
+npm-debug.log*
+tests/browser/out/
+
+# Never distribute local Supabase state, example files populated with credentials, or credential bundles
+supabase/.temp/
+**/.temp/
+**/*.eszip
+**/*service-account*.env
+**/secrets.env
+**/*credentials*.zip

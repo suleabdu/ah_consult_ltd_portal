@@ -1,39 +1,5 @@
-/* =============================================================================
-   SETUP GUIDE  -  supabase/functions/create-application/index.ts
-=============================================================================
-WHAT IT IS
-   Called when an applicant presses "Proceed to payment". Locks the price on the server, then creates the payment with the active payment method (bank account, Monnify account or Upperlink checkout link).
-
-WHERE THIS FILE GOES
-   supabase/functions/create-application/index.ts
-   The file MUST be named index.ts. Its folder name (create-application) is the function name.
-   Run every command below from the PROJECT ROOT (the folder that CONTAINS the "supabase" folder).
-   Its helpers live in supabase/functions/_shared/ (lib.ts, crypto.ts, pay.ts). Keep that folder exactly there.
-
-ONE-TIME PREPARATION (skip if already done)
-   supabase login
-   supabase link --project-ref YOUR_PROJECT_REF      (the part of your project URL before .supabase.co)
-
-DEPLOY
-   supabase functions deploy create-application
-   (Normal deploy. Signed-in users reach it with their login token.)
-   "Docker is not running"? Start Docker Desktop, or update the Supabase CLI and add  --use-api  to the command.
-
-SECRETS NEEDED   (supabase secrets set NAME=value   or   Dashboard > Edge Functions > Secrets)
-   None required once a payment method exists in the dashboard (SETTINGS_ENCRYPTION_KEY is needed for encrypted keys). Before any method exists it falls back to the old PAY_MODE / MONNIFY_* / BANK_* secrets.
-
-DATABASE NEEDED
-   Migrations 001 to 010 (010 adds the payment method columns).
-
-HOW TO TEST
-   Sign in on apply.html, choose a course, press Proceed to payment. You should reach the payment page. Add ?debug=1 to the page address to see technical detail if it fails.
-
-COMMON PROBLEMS
-   "Payment could not be set up" = the active method is incomplete: open Payment Methods and press Test.  "Could not reach the server" = this function is not deployed, or old copies are running: redeploy all functions.
-   ============================================================================= */
-
 // "Proceed to payment": locks the price server-side (per-course or Full Package), creates the application and a payment account.
-import { admin, json, safe, userFrom } from "../_shared/lib.ts";
+import { admin, json, safe, safeReturnUrl, userFrom } from "../_shared/lib.ts";
 import { createPayment, envProvider, loadProvider } from "../_shared/pay.ts";
 import { kickSheetSync } from "../_shared/sync.ts";
 Deno.serve(safe(async (req) => {
@@ -94,7 +60,8 @@ Deno.serve(safe(async (req) => {
   await db.from("payment_attempts").update({ provider: prov.kind }).eq("user_id", user.id).eq("idempotency_key", idempotencyKey);
   const { data: prof } = await db.from("profiles").select("full_name").eq("id", user.id).single();
   const origin = (req.headers.get("origin") ?? "").replace(/\/$/, "");
-  const back = /^https?:\/\//.test(String(returnUrl ?? "")) ? String(returnUrl) : `${origin}/payment-success.html`;
+  const allowedReturn = [...(Deno.env.get("ALLOWED_ORIGINS") ?? Deno.env.get("ALLOWED_ORIGIN") ?? "").split(",").map((x) => x.trim()).filter((x) => x && x !== "*"), origin].filter(Boolean);
+  const back = safeReturnUrl(returnUrl, `${origin}/payment-success.html`, allowedReturn);   // never redirect the payer to an arbitrary site
   let out;
   try { out = await createPayment(prov, { ref, amount: total, name: prof?.full_name ?? user.email!, email: user.email!, appId: applicationId ?? idempotencyKey, returnUrl: back }); }
   catch (e) {
@@ -104,17 +71,20 @@ Deno.serve(safe(async (req) => {
 
   let app: any = draft;
   if (draft) {
+    const { error: swapErr } = await db.rpc("replace_application_courses", { p_application_id: draft.id, p_rows: courses.map((c:any)=>({course_code:c.code,fee_ngn:pkg?0:c.fee_ngn})) });   // one transaction: delete + insert
+    if (swapErr) { console.error("replace courses", swapErr.message); return json({ error: "Could not save your selected courses. Please try again." }, 500); }
     const { data: updated, error } = await db.from("applications").update({ total_ngn: total, package_code: pkg?.code ?? null, idempotency_key: idempotencyKey, pay_reference: ref, pay_bank: out.bank, pay_account: out.account, pay_provider: prov.kind, pay_provider_id: prov.id, pay_mode: prov.mode, pay_url: out.url, pay_gateway_ref: out.gatewayRef, status: "pending_payment" }).eq("id", draft.id).select().single();
     if (error) return json({ error: "Could not prepare your payment. Please try again." }, 500); app = updated;
-    await db.from("application_courses").delete().eq("application_id", app.id);
   } else {
     const { data: existing } = await db.from("applications").select("*").eq("user_id", user.id).eq("intake_id", effectiveIntakeId).not("status","in","(expired,rejected)").maybeSingle();
     if (existing) return json({ application: existing, idempotent: true });
     const { data: inserted, error } = await db.from("applications").insert({ user_id:user.id,intake_id:effectiveIntakeId,total_ngn:total,package_code:pkg?.code??null,idempotency_key:idempotencyKey,pay_reference:ref,pay_bank:out.bank,pay_account:out.account,pay_provider:prov.kind,pay_provider_id:prov.id,pay_mode:prov.mode,pay_url:out.url,pay_gateway_ref:out.gatewayRef }).select().single();
     if (error) return json({ error:"Could not start your application. Please try again." },500); app=inserted;
   }
-  const { error: courseError } = await db.from("application_courses").insert(courses.map((c:any)=>({application_id:app.id,course_code:c.code,fee_ngn:pkg?0:c.fee_ngn})));
-  if (courseError) return json({ error:"Could not save your selected courses. Please try again." },500);
+  if (!draft) {
+    const { error: courseError } = await db.rpc("replace_application_courses", { p_application_id: app.id, p_rows: courses.map((c:any)=>({course_code:c.code,fee_ngn:pkg?0:c.fee_ngn})) });
+    if (courseError) { console.error("save courses", courseError.message); return json({ error: "Could not save your selected courses. Please try again." }, 500); }
+  }
   await db.from("payment_attempts").update({status:"completed",application_id:app.id,provider_reference:app.pay_reference,provider_transaction_id:app.pay_gateway_ref,completed_at:new Date().toISOString()}).eq("user_id",user.id).eq("idempotency_key",idempotencyKey);
   await kickSheetSync();
   return json({ application: app });

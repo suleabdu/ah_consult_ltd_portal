@@ -2,51 +2,16 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Payment Confirmed | AH Consult CAD Training Programs</title>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
-<style>
-:root{--orange:#ea580c;--orange-d:#c2410c;--black:#111827;--ink:#1f2937;--muted:#6b7280;--line:#d1d5db;--ok:#16a34a;--err:#dc2626;--font:'Roboto',Arial,sans-serif}
-*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;font:14px/1.5 var(--font);color:var(--ink);background:linear-gradient(rgba(17,24,39,.75),rgba(17,24,39,.75)),url('https://lh3.googleusercontent.com/d/1j4e1Rx5igtD7_4GTuVhz7WlQ3lCyrF68') center/cover fixed;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 14px}
-header{width:100%;max-width:560px;background:#e5e7eb;border-radius:12px 12px 0 0;padding:14px;display:flex;align-items:center;justify-content:center;gap:12px}header img{height:40px}header span{font-weight:900;text-transform:uppercase;letter-spacing:.04em;font-size:14px;text-align:center}
-main{width:100%;max-width:560px;background:#fff;border-radius:0 0 12px 12px;padding:28px 22px;box-shadow:0 25px 50px -12px rgba(0,0,0,.35);text-align:center}
-.tick{width:68px;height:68px;border-radius:50%;background:var(--ok);color:#fff;display:grid;place-items:center;font-size:36px;margin:0 auto 12px}.tick.w{background:#d97706}.tick.x{background:var(--err)}
-h1{margin:0 0 4px;font-size:1.25rem;font-weight:900;text-transform:uppercase;color:var(--ink)}p{color:var(--muted);margin:0 0 14px}
-.kv{text-align:left;margin:16px 0}.kv div{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #f3f4f6}.kv span{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase}.kv b{text-align:right}
-.total{display:flex;justify-content:space-between;align-items:center;background:#1f2937;color:#fff;border-radius:8px;padding:12px 18px;font-weight:700;text-transform:uppercase;font-size:12px}.total span:last-child{font-size:19px;font-weight:900}
-.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.btns a,.btns button{flex:1;min-width:140px;text-align:center;text-decoration:none;background:var(--orange);color:#fff;border:0;border-radius:8px;padding:11px 16px;font:700 12.5px var(--font);text-transform:uppercase;cursor:pointer}
-.btns .o{background:#fff;color:var(--ink);border:1px solid var(--line)}
-@media print{body{background:#fff;padding:0}header{background:#fff}main{box-shadow:none}.btns{display:none}}
-</style><link rel="stylesheet" href="css/ah-design-system.css">
-</head><body class="ahds">
-<header><img class="lg" alt="" onerror="this.style.display='none'"><span>AH Consult CAD Training Programs</span></header>
+<link rel="stylesheet" href="css/payment-success-inline-1.css"><link rel="stylesheet" href="css/ah-design-system.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="icon" href="https://lh3.googleusercontent.com/d/1Qp_nbC6oekgdzjJqGBHwHw125t1ABYUf">
+<meta name="robots" content="noindex,nofollow">
+<script src="js/inline-handlers.js"></script>
+</head><body class="ahds v18">
+<header><img class="lg" alt="" data-hide-on-error="true"><span>AH Consult CAD Training Programs</span></header>
 <main id="m"><div class="tick w">&hellip;</div><h1>Checking your payment</h1><p>Please wait a moment.</p></main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="vendor/supabase.min.js"></script>
 <script src="js/config.js"></script>
 <script src="js/theme.js"></script>
-<script>
-const m=document.getElementById('m'),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),naira=n=>'\u20A6'+Number(n).toLocaleString();
-const show=(k,t,p,extra)=>{m.innerHTML=`<div class="tick ${k}">${k==='x'?'!':k==='w'?'&hellip;':'&#10003;'}</div><h1>${t}</h1><p>${p}</p>${extra||''}`};
-const home='<div class="btns"><a href="apply.html">Back to my dashboard</a></div>';
-(async function(){
- const C=window.APPLY_CONFIG;if(!window.supabase||!C||!C.SUPABASE_URL)return show('x','Setup problem','js/config.js or the Supabase library did not load.');
- document.querySelectorAll('.lg').forEach(i=>{if(C.LOGO_URL)i.src=C.LOGO_URL;else i.style.display='none'});
- const sb=supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY),{data:{session}}=await sb.auth.getSession();
- if(!session)return show('x','Please sign in','Sign in to see your payment confirmation.','<div class="btns"><a href="apply.html">Sign in</a></div>');
- const P=new URLSearchParams(location.search),fromGateway=P.has('paymentReference')||P.has('transactionReference')||P.has('reference'),OK=['paid','submitted','under_review','approved'];
- let app=null,pays=[];
- for(let i=0;i<(fromGateway?12:1);i++){ // gateway redirects can arrive before the webhook: wait up to ~60s
-  const {data}=await sb.from('applications').select('*').eq('user_id',session.user.id).not('status','in','(expired,rejected)').maybeSingle();app=data;
-  if(app&&app.status==='pending_payment'&&app.pay_url){try{await fetch(C.SUPABASE_URL+'/functions/v1/verify-payment',{method:'POST',headers:{'Content-Type':'application/json',apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify({applicationId:app.id})});const r2=await sb.from('applications').select('*').eq('id',app.id).maybeSingle();app=r2.data||app}catch(e){}}
-  if(app&&OK.includes(app.status)){const r=await sb.from('payments').select('*').eq('application_id',app.id);pays=r.data||[];if(pays.length)break}
-  if(i<11&&fromGateway){show('w','Confirming your payment','This usually takes under a minute. Please do not close this page.');await new Promise(r=>setTimeout(r,5000))}}
- // Activated ONLY by a verified payment record in the database. Query-string values are never trusted.
- if(!app||!OK.includes(app.status)||!pays.length)return show('x','No confirmed payment yet','This page opens only after a payment has been confirmed. If you have just paid, your confirmation may still be processing.',home);
- localStorage.setItem('ahct_paid_seen_'+app.id,'1');
- const [ac,cs,pr]=await Promise.all([sb.from('application_courses').select('course_code,fee_ngn').eq('application_id',app.id),sb.from('courses').select('code,name,category'),sb.from('profiles').select('full_name').eq('id',session.user.id).maybeSingle()]);
- const nm=Object.fromEntries((cs.data||[]).map(c=>[c.code,c.name+' ('+c.category+')'])),p=pays[0],next=app.status==='paid';
- show('ok','Payment confirmed','Thank you'+(pr.data?.full_name?', '+esc(pr.data.full_name):'')+'. Your payment has been received and verified. Your application preview will open automatically.',
-  `<div class="kv"><div><span>Reference</span><b>${esc(p.reference)}</b></div><div><span>Date</span><b>${new Date(p.paid_at||app.paid_at).toLocaleString()}</b></div><div><span>Programme</span><b>${app.package_code?'Full Package':'Per course'}</b></div>${(ac.data||[]).map(x=>`<div><span>${esc(nm[x.course_code]||x.course_code)}</span><b>${app.package_code?'Included':naira(x.fee_ngn)}</b></div>`).join('')}</div>
-   <div class="total"><span>Amount paid</span><span>${naira(p.paid_ngn)}</span></div>
-   <div class="btns"><a href="apply.html">${next?'Continue to application form':'Go to my dashboard'}</a><button class="o" style="background:#fff;color:#1f2937;border:1px solid #d1d5db" onclick="window.print()">Print receipt</button></div>`);
- setTimeout(()=>{location.href='apply.html'},2500);
-})().catch(e=>show('x','Something went wrong',esc(e.message)+'.',home));
-</script><script src="js/ah-ux.js"></script>
+<script src="js/pages/payment-success.js"></script><script src="js/ah-ux.js"></script>
 </body></html>

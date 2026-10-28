@@ -1,3 +1,4 @@
+import { scheduleReceiptIssuance } from "./documents.ts";
 /* =============================================================================
    SETUP GUIDE  -  supabase/functions/_shared/pay.ts
 =============================================================================
@@ -15,7 +16,7 @@ WHERE THIS FILE GOES
 
 AFTER YOU COPY OR CHANGE IT
    Redeploy the functions that use it (each keeps the copy it had when it was deployed):
-   PowerShell:  'create-application','cancel-application','submit-application','admin-register','admin-delete','admin-settings','verify-payment','payment-webhook','upperlink-webhook','sheet-sync','sheet-review' | ForEach-Object { supabase functions deploy $_ }
+   PowerShell:  'create-application','cancel-application','submit-application','admin-register','admin-delete','admin-settings','verify-payment','payment-webhook','upperlink-webhook','sheet-sync' | ForEach-Object { supabase functions deploy $_ }
    Or run:      scripts/deploy-functions.ps1  (Windows)   or   bash scripts/deploy-functions.sh  (Mac/Linux)
 
 IMPORTS: ./crypto.ts  (crypto.ts must be in the same folder).
@@ -29,6 +30,7 @@ HOW TO CHECK THE FOLDER IS RIGHT
 
 // Payment method adapters: manual bank transfer, Monnify reserved accounts, Upperlink hosted checkout.
 // The active method is chosen in Admin Dashboard > Payment Methods. Secrets are decrypted only here, inside the function.
+import { amountCovers, assertPublicHttps, isPaidStatus } from "./guards.ts";
 import { decryptText } from "./crypto.ts";
 export type Provider = { id: string | null; kind: "manual" | "monnify" | "upperlink"; label: string; mode: "test" | "live"; config: Record<string, any>; secrets: Record<string, string> };
 export type Created = { bank: string; account: string; url: string | null; gatewayRef: string | null };
@@ -78,7 +80,7 @@ export async function createPayment(p: Provider, c: { ref: string; amount: numbe
     return { bank: acct.bankName, account: acct.accountNumber, url: null, gatewayRef: null };
   }
   // upperlink: hosted checkout. The exact endpoint addresses come from the Upperlink developer documentation and are set per method.
-  const init = s(p.config.init_url); if (!/^https:\/\//.test(init)) throw new Error("The Upperlink 'initialise payment URL' is not set. Add it in Payment Methods (copy it from the Upperlink documentation).");
+  const init = s(p.config.init_url); try { assertPublicHttps(init, "Upperlink initialise URL"); } catch (e) { throw new Error((e as Error).message + " Add it in Payment Methods (copy it from the Upperlink documentation)."); }
   const r = await fetch(init, { method: "POST", signal: AbortSignal.timeout(20000), headers: upperlinkHeaders(p),
     body: JSON.stringify({ amount: c.amount, merchantId: s(p.config.merchant_id), meta: JSON.stringify({ reference: c.ref, application_id: c.appId }), redirectUrl: s(p.config.redirect_url) || `${c.returnUrl}?reference=${encodeURIComponent(c.ref)}` }) });
   const txt = await r.text(); let j: any = {}; try { j = JSON.parse(txt); } catch { /* not json */ }
@@ -89,7 +91,7 @@ export async function createPayment(p: Provider, c: { ref: string; amount: numbe
 
 export async function verifyPayment(p: Provider, app: { pay_reference: string; pay_gateway_ref?: string | null; total_ngn: number }): Promise<{ paid: boolean; amount: number | null; note: string }> {
   if (p.kind !== "upperlink") return { paid: false, amount: null, note: "This method is confirmed by bank transfer or webhook." };
-  const tpl = s(p.config.verify_url); if (!/^https:\/\//.test(tpl)) throw new Error("The Upperlink 'verify payment URL' is not set.");
+  const tpl = s(p.config.verify_url); assertPublicHttps(tpl.replace(/\{[a-z_]+\}/gi, "x"), "Upperlink verify URL");
   const ref = app.pay_gateway_ref || app.pay_reference, url = tpl.replace("{reference}", encodeURIComponent(ref)).replace("{merchantId}", encodeURIComponent(s(p.config.merchant_id)));
   const post = s(p.config.verify_method).toUpperCase() === "POST";
   const r = await fetch(url, { method: post ? "POST" : "GET", signal: AbortSignal.timeout(20000), headers: upperlinkHeaders(p), body: post ? JSON.stringify({ reference: ref, merchantId: s(p.config.merchant_id) }) : undefined });
@@ -97,7 +99,8 @@ export async function verifyPayment(p: Provider, app: { pay_reference: string; p
   if (!r.ok) return { paid: false, amount: null, note: `Upperlink answered HTTP ${r.status}` };
   const status = s(pick(j, "data.status", "data.paymentStatus", "data.transactionStatus", "data.responseMessage", "status", "message")).toLowerCase();
   const amount = Number(pick(j, "data.amount", "data.amountPaid", "data.paidAmount", "amount")); const amt = Number.isFinite(amount) ? amount : null;
-  const paid = /(success|paid|complete|approved|settled)/.test(status) && !/(fail|declin|pending|abandon|cancel|reverse|not)/.test(status) && (amt === null || amt + 1 >= app.total_ngn);
+  // Strict: whole-word status AND the provider must report an amount that covers the total (no tolerance, no null pass-through).
+  const paid = isPaidStatus(status) && amountCovers(amt, app.total_ngn);
   return { paid, amount: amt, note: redact(status, p).slice(0, 80) };
 }
 
@@ -112,6 +115,7 @@ export async function markPaid(db: any, app: any, paidNgn: number, ref: string |
     p_source: "provider_verification"
   });
   if (r.error) throw new Error(`Could not settle payment: ${r.error.message}`);
+  scheduleReceiptIssuance(); // Database receipt queue remains durable if async generation fails.
   return r.data;
 }
 
@@ -120,7 +124,7 @@ export async function testProvider(p: Provider): Promise<{ ok: boolean; message:
   if (p.kind === "manual") return s(p.config.account_number) ? { ok: true, message: "Bank details are saved. Applicants will see " + s(p.config.account_number) + "." } : { ok: false, message: "No account number saved yet." };
   if (p.kind === "monnify") { try { await monnifyToken(p); return { ok: true, message: `Monnify accepted these ${p.mode} keys.` }; } catch (e) { return { ok: false, message: e instanceof Error ? e.message : String(e) }; } }
   try {
-    const init = s(p.config.init_url); if (!/^https:\/\//.test(init)) return { ok: false, message: "Add the Upperlink 'initialise payment URL' first." };
+    const init = s(p.config.init_url); try { assertPublicHttps(init, "Upperlink initialise URL"); } catch (e) { return { ok: false, message: (e as Error).message }; }
     const r = await fetch(init, { method: "POST", signal: AbortSignal.timeout(20000), headers: upperlinkHeaders(p), body: JSON.stringify({ amount: 100, merchantId: s(p.config.merchant_id), meta: JSON.stringify({ reference: "TEST-" + Date.now() }), redirectUrl: s(p.config.redirect_url) || "https://example.com/" }) });
     const txt = await r.text(); let j: any = {}; try { j = JSON.parse(txt); } catch { /* not json */ }
     const url = pick(j, "data.checkOutUrl", "data.checkoutUrl", "data.authorization_url", "data.url", "data.link", "checkOutUrl", "checkoutUrl", "url");

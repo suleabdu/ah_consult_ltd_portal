@@ -1,6 +1,3 @@
-[functions.sheet-review]
-verify_jwt = false
-
 [functions.admin-register]
 verify_jwt = false
 
@@ -12,3 +9,12 @@ verify_jwt = false
 
 [functions.sheet-sync]
 verify_jwt = true
+[functions.document-verify]
+verify_jwt = false
+
+# Local Supabase only. For the hosted project, configure the equivalent setting
+# in Supabase Dashboard > Authentication > Providers > Email > Confirm Email OFF.
+# With confirmations disabled, signUp returns a session and applicants enter
+# their application portal immediately. Do not bypass provider auth tokens.
+[auth.email]
+enable_confirmations = false

@@ -1,43 +1,20 @@
-/* =============================================================================
-   SETUP GUIDE  -  supabase/functions/cancel-application/index.ts
-=============================================================================
-WHAT IT IS
-   Lets an applicant change their courses before paying by cancelling the unpaid application.
-
-WHERE THIS FILE GOES
-   supabase/functions/cancel-application/index.ts
-   The file MUST be named index.ts. Its folder name (cancel-application) is the function name.
-   Run every command below from the PROJECT ROOT (the folder that CONTAINS the "supabase" folder).
-   Its helpers live in supabase/functions/_shared/ (lib.ts, crypto.ts, pay.ts). Keep that folder exactly there.
-
-ONE-TIME PREPARATION (skip if already done)
-   supabase login
-   supabase link --project-ref YOUR_PROJECT_REF      (the part of your project URL before .supabase.co)
-
-DEPLOY
-   supabase functions deploy cancel-application
-   (Normal deploy. Signed-in users reach it with their login token.)
-   "Docker is not running"? Start Docker Desktop, or update the Supabase CLI and add  --use-api  to the command.
-
-SECRETS NEEDED   (supabase secrets set NAME=value   or   Dashboard > Edge Functions > Secrets)
-   None.
-
-DATABASE NEEDED
-   Migrations 001 to 004.
-
-HOW TO TEST
-   On the payment page press "Go back and change my courses" and confirm.
-
-COMMON PROBLEMS
-   It refuses if a payment was already claimed or received. That is intended.
-   ============================================================================= */
-
 // Lets an applicant change their courses before paying: cancels the unpaid application (and its payment reference).
 import { admin, json, safe, userFrom } from "../_shared/lib.ts";
 import { kickSheetSync } from "../_shared/sync.ts";
+import { z } from "npm:zod@3.23.8";
+const CancelInput = z.object({ applicationId: z.string().uuid() }).strict();
 Deno.serve(safe(async (req) => {
   const user = await userFrom(req); if (!user) return json({ error: "Please sign in again." }, 401);
-  const { applicationId } = await req.json();
+  if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
+  const reportedLength = Number(req.headers.get("Content-Length") || 0);
+  if (reportedLength > 4096) return json({ error: "Request is too large." }, 413);
+  const raw = await req.text();
+  if (raw.length > 4096) return json({ error: "Request is too large." }, 413);
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { return json({ error: "Enter a valid application reference." }, 400); }
+  const result = CancelInput.safeParse(parsed);
+  if (!result.success) return json({ error: "Enter a valid application reference." }, 400);
+  const { applicationId } = result.data;
   const db = admin();
   const { data: app } = await db.from("applications").select("*").eq("id", applicationId).eq("user_id", user.id).single();
   if (!app) return json({ error: "Application not found." }, 404);

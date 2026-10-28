@@ -1,0 +1,9 @@
+# Required action — Google service-account credential exposure
+
+The V18.6 zip supplied for this audit contained a populated `supabase/secrets.example.env`, including a Google service-account private key for the registration portal. This modified source copy replaces that file with inert placeholders and excludes `.git/` and `supabase/.temp/` from its distribution. **Neither removing the key from files nor changing `.gitignore` revokes it.**
+
+**Owner tasks (perform using Google Cloud Console):** Disable/delete the exposed service-account key, create a replacement only if necessary, update the secret stored in the actual Edge Function deployment, test the Sheet sync, review recent Google Cloud audit logs and service-account permissions, and inspect any previously shared archives or repositories. If service-account credentials or other provider credentials were shared earlier, rotate those as well. Do not paste new credentials into ChatGPT, commits, source files or issue tickets.
+
+**Repository history:** This clean export deliberately omits `.git/` because existing history may contain keys and obsolete Flask source. In the original repository, run `gitleaks git --redact --report-path <private-location>` against **all** references; scan current source with `gitleaks dir --redact .`. If leaks are found, rotate first; coordinate any history rewrite and force-push with all collaborators, then invalidate old clones and CI caches. A scanner run does not prove the key was revoked. The original repository history has **not** been certified clean by this package.
+
+**Deployment:** Do not use the original V18.6 archive for distribution or release. Store credentials only in Supabase/Google secret stores; make `supabase/.env` local and ignored. Use the [release guide](RELEASE_V18_6_1.md) for remaining blocking checks.

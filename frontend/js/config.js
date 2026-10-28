@@ -4,7 +4,7 @@
 
    How it decides:
      - Opened from localhost / 127.0.0.1 / a home-network address / file  ->  "local"
-     - Opened from any real website address (Netlify, your domain)        ->  "production"
+     - Opened from any real website address (Vercel, your domain)        ->  "production"
    "local" uses LOCAL below. While LOCAL is null (the default) local pages use the
    production project, and a red ribbon warns you that you are on LIVE data.
    When you create a separate staging project, paste its URL and anon key into LOCAL
@@ -12,14 +12,12 @@
 
    Only the project URL and the public "anon" key belong here. They are safe to
    publish; real protection comes from the database security rules.
-   Test the live project from your own machine with:  http://localhost:5500/apply.html?env=production
+   Test the live project from your own machine with:  http://localhost:5500/apply?env=production
    ============================================================================= */
-const API_BASE_URL = "https://ahct-student-hub.onrender.com"; // legacy backend; only the old pages still read this
-const ALLOWED_ORIGINS = ["https://ahconsultportal.vercel.app", "http://localhost:8888"];
 (function () {
   var PRODUCTION = {
-    SUPABASE_URL: "https://xwieiqrnlvcjajdeinqc.supabase.co",
-    SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3aWVpcXJubHZjamFqZGVpbnFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyNjE1MzksImV4cCI6MjEwNjgzNzUzOX0.dCdmn69bi0oznIOmEWgXQrz_-HHNT2MYGxY8n8ydukI"
+    SUPABASE_URL: "https://loultswskhdqkrufwxpv.supabase.co",
+    SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxvdWx0c3dza2hkcWtydWZ3eHB2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4NTE5MjUsImV4cCI6MjEwODQyNzkyNX0.cl6QkZvLi6NwjS2H66UAYP8jBG-J-5kAIif6AK9PLu8"
   };
   var LOCAL = null;   // e.g. { SUPABASE_URL: "https://YOUR-STAGING-REF.supabase.co", SUPABASE_ANON_KEY: "YOUR-STAGING-ANON-KEY" }
 
