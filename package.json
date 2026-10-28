@@ -14,7 +14,7 @@
     "configure:frontend": "node scripts/configure-frontend.mjs"
   },
   "devDependencies": {
-    "@supabase/supabase-js": "2.45.4",
+    "@supabase/supabase-js": "2.118.0",
     "esbuild": "0.24.2",
     "eslint": "^9.17.0",
     "globals": "^15.14.0",
