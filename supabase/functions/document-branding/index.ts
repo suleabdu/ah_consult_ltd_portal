@@ -1,76 +1,147 @@
-/** Administrator-only letterhead upload and preview. Stored outside public web root. */
-import { admin, safe, json, corsHeaders, userFrom } from "../_shared/lib.ts";
-import { PDFDocument } from "npm:pdf-lib@1.17.1";
-Deno.serve(safe(async (req) => {
-  if (!['GET','POST'].includes(req.method)) return json({error:'Method not supported'},405);
-  const user = await userFrom(req); if(!user) return json({error:'Sign in required'},401);
-  const db=admin();const {data:staff}=await db.from('staff').select('role,status').eq('id',user.id).maybeSingle();
-  if(!staff||staff.status!=='approved'||staff.role!=='administrator') return json({error:'Administrator access required'},403);
-  const {data:brand}=await db.from('institution_document_branding').select('file_path,image_mime,revision,top_safe_mm,bottom_safe_mm').eq('id',true).single();
-  if(req.method==='GET'&&new URL(req.url).searchParams.has('versions')){
-    const {data,error}=await db.from('institution_letterhead_versions').select('id,revision,created_at,retired_at,file_path').order('revision',{ascending:false});
-    if(error)return json({error:'Could not read the published letterhead library. Apply migration 034.'},503);
-    return json({versions:(data||[]).map(v=>({id:v.id,revision:v.revision,created_at:v.created_at,retired:!!v.retired_at,default:v.file_path===brand?.file_path}))});
+/** Native institutional identity profiles, V18.7.1. All actions require a valid staff JWT. */
+import {admin, safe, json, corsHeaders, userFrom} from '../_shared/lib.ts';
+
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const allowedFields=['organisation_name','organisation_tagline','postal_address','phone','email','website','header_alignment'] as const;
+const textField=(v:unknown,max:number):string=>{
+ if(typeof v!=='string') throw Error('Invalid identity field');
+ const str=v.trim();
+ if(str.length>max||/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(str))throw Error('Text exceeds limit or contains invalid characters');
+ return str;
+};
+const visible=(p:any)=>({id:p.id,label:p.label,status:p.status,is_default:p.is_default,revision:p.revision,
+ organisation_name:p.organisation_name,organisation_tagline:p.organisation_tagline,postal_address:p.postal_address,
+ phone:p.phone,email:p.email,website:p.website,header_alignment:p.header_alignment,has_logo:!!p.logo_path,
+ updated_at:p.updated_at});
+const failure=(message:string,status=422)=>json({error:message},status);
+const parseId=(v:unknown)=>typeof v==='string'&&UUID.test(v)?v:null;
+
+Deno.serve(safe(async(req)=>{
+ if(!['GET','POST'].includes(req.method))return failure('Unsupported method',405);
+ const user=await userFrom(req);if(!user)return failure('Sign in again to manage institutional identities.',401);
+ const db=admin();const {data:staff,error:staffErr}=await db.from('staff').select('role,status').eq('id',user.id).maybeSingle();
+ if(staffErr||staff?.role!=='administrator'||staff?.status!=='approved')return failure('An approved administrator account is required.',403);
+ const profiles=db.from('institution_document_identity_profiles');
+ const {data:active,error:activeErr}=await db.from('institution_document_identity').select('*').eq('id',true).maybeSingle();
+ if(activeErr||!active)return failure('Institutional identity unavailable. Apply database migration 040.',503);
+ const removeOrphanedLogo=async(path:string)=>{
+   // Delete storage bytes only when no saved identity uses the asset. Already
+   // issued PDFs embed their own logo and remain separate immutable files.
+   const [{data:remaining,error:lookupError},{data:live,error:liveError}]=await Promise.all([
+     profiles.select('id').eq('logo_path',path).limit(1),
+     db.from('institution_document_identity').select('logo_path').eq('id',true).maybeSingle()
+   ]);
+   if(!lookupError&&!liveError&&!remaining?.length&&live?.logo_path!==path)
+     await db.storage.from('institution-document-logos').remove([path]);
+ };
+ const params=new URL(req.url).searchParams;
+ if(req.method==='GET'){
+  if(params.has('logo')){
+   const profileId=parseId(params.get('profile_id'));
+   let logoPath=active.logo_path,logoMime=active.logo_mime;
+   if(profileId){const {data:p,error}=await profiles.select('logo_path,logo_mime').eq('id',profileId).maybeSingle();
+    if(error||!p)return failure('Identity profile not found.',404);
+    logoPath=p.logo_path;logoMime=p.logo_mime;
+   }
+   if(!logoPath)return failure('No logo exists for this identity.',404);
+   const {data,error}=await db.storage.from('institution-document-logos').download(logoPath);
+   if(error||!data)return failure('The saved logo file is unavailable.',404);
+   return new Response(await data.arrayBuffer(),{headers:{...corsHeaders(req),'Content-Type':logoMime||'image/png',
+    'Cache-Control':'private,no-store','X-Content-Type-Options':'nosniff'}});
   }
-  if(req.method==='GET'&&new URL(req.url).searchParams.has('settings'))return json({revision:brand?.revision||0,letterhead_uploaded:!!brand?.file_path,top_safe_mm:Number(brand?.top_safe_mm||85),bottom_safe_mm:Number(brand?.bottom_safe_mm||20)});
-  if(req.method==='GET'){
-    if(!brand?.file_path) return json({error:'No letterhead uploaded'},404);
-    const {data,error}=await db.storage.from('institution-letterheads').download(brand.file_path);
-    if(error||!data) return json({error:'Letterhead file not available'},404);
-    return new Response(await data.arrayBuffer(),{headers:{...corsHeaders(req),'Content-Type':brand.image_mime||'image/png','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
-  }
-  if((req.headers.get('content-type')||'').includes('application/json')){
-    const data=await req.json().catch(()=>({}));
-    if(['set_default','archive'].includes(String(data.action||''))){
-      if(!/^[0-9a-f-]{36}$/i.test(String(data.version_id||'')))return json({error:'Invalid letterhead version ID'},422);
-      const {data:v}=await db.from('institution_letterhead_versions').select('id,revision,file_path,image_mime,retired_at').eq('id',data.version_id).maybeSingle();
-      if(!v)return json({error:'Letterhead version not found'},404);
-      if(v.retired_at)return json({error:'Archived letterheads cannot be selected or archived again'},409);
-      if(data.action==='archive'){
-        if(v.file_path===brand?.file_path)return json({error:'Choose a different default before archiving this letterhead'},409);
-        const {error}=await db.from('institution_letterhead_versions').update({retired_at:new Date().toISOString(),retired_by:user.id}).eq('id',v.id).is('retired_at',null);
-        if(error)return json({error:'Could not archive old letterhead'},503);
-      }else{
-        // A previously published revision may become the default again. No historical PDF is rewritten.
-        const {error}=await db.from('institution_document_branding').update({file_path:v.file_path,image_mime:v.image_mime,revision:v.revision,updated_at:new Date().toISOString(),updated_by:user.id}).eq('id',true);
-        if(error)return json({error:'Could not switch default letterhead'},503);
-      }
-      await db.from('audit_log').insert({actor:user.id,action:data.action==='archive'?'letterhead_archived':'letterhead_default_changed',target:v.id,note:`Revision ${v.revision}`});
-      return json({ok:true,message:data.action==='archive'?'Old letterhead archived':'Default letterhead updated'});
-    }
-    const top=Number(data.top_safe_mm), bottom=Number(data.bottom_safe_mm);
-    if(!Number.isFinite(top)||!Number.isFinite(bottom)||top<25||top>120||bottom<12||bottom>60||top+bottom>=240)return json({error:'Invalid letterhead margins. Use top 25–120 mm, bottom 12–60 mm.'},422);
-    const {error}=await db.from('institution_document_branding').update({top_safe_mm:top,bottom_safe_mm:bottom,updated_at:new Date().toISOString(),updated_by:user.id}).eq('id',true);
-    if(error)return json({error:'Could not save letterhead safe areas.'},503);
-    await db.from('audit_log').insert({actor:user.id,action:'institution_letterhead_margins',target:'document_branding',note:`Top ${top} mm; bottom ${bottom} mm`});
-    return json({ok:true,top_safe_mm:top,bottom_safe_mm:bottom});
-  }
-  const form=await req.formData();const file=form.get('letterhead');
-  if(!(file instanceof File))return json({error:'Select a PNG or JPEG letterhead image'},422);
-  if(file.size<100||file.size>8*1024*1024)return json({error:'Letterhead size must be between 100 bytes and 8 MB'},422);
-  const bytes=new Uint8Array(await file.arrayBuffer());
-  const png=bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4e&&bytes[3]===0x47&&bytes[4]===0x0d&&bytes[5]===0x0a&&bytes[6]===0x1a&&bytes[7]===0x0a;
-  const jpg=bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff;
+  const {data:list,error}=await profiles.select('*').order('updated_at',{ascending:false}).limit(100);
+  if(error)return failure('Identity profiles unavailable. Apply migration 041 and redeploy document-branding.',503);
+  return json({identity:visible({...active,is_default:true}),profiles:(list||[]).map(visible),
+    message:'Publishing changes the institutional branding used by new documents. Previously issued PDFs remain archived and unchanged.'});
+ }
+ let input:any={};const ct=req.headers.get('content-type')||'';
+ if(ct.includes('multipart/form-data')){
+  const form=await req.formData();const id=parseId(form.get('profile_id'));
+  if(!id)return failure('Choose a saved draft before uploading its logo.');
+  const file=form.get('logo');if(!(file instanceof File))return failure('Choose a PNG or JPEG logo.');
+  if(file.size<100||file.size>1048576)return failure('Logo must be between 100 bytes and 1 MB.');
+  const {data:profile,error:lookupError}=await profiles.select('*').eq('id',id).maybeSingle();
+  if(lookupError||!profile)return failure('Identity profile not found.',404);
+  if(profile.is_default)return failure('Save a draft identity before replacing its live logo.',409);
+  const raw=new Uint8Array(await file.arrayBuffer());
+  const png=raw.length>8&&[137,80,78,71,13,10,26,10].every((n,i)=>raw[i]===n);
+  const jpg=raw.length>4&&raw[0]===255&&raw[1]===216&&raw[2]===255;
   const mime=png?'image/png':jpg?'image/jpeg':null;
-  if(!mime || (file.type!==mime))return json({error:'Only actual PNG/JPEG images are accepted, not SVG or PDFs'},422);
-  try {
-    const pdf=await PDFDocument.create();const image=png?await pdf.embedPng(bytes):await pdf.embedJpg(bytes);
-    const aspect=image.width/image.height;
-    if(image.width<1200||image.height<1600||Math.abs(aspect-210/297)>0.075)
-      return json({error:'For full-page stationery, upload an A4 portrait letterhead at least 1200 × 1600 pixels (recommended 2480 × 3508).'},422);
-  } catch {return json({error:'The image could not be decoded as a valid PNG/JPEG.'},422);}
-  // Name is generated by the server. No direct public read or client uploads.
-  const path=`institutional/${crypto.randomUUID()}.${png?'png':'jpg'}`;
-  const {error:uploaded}=await db.storage.from('institution-letterheads').upload(path,bytes,{contentType:mime,upsert:false});
-  if(uploaded)return json({error:'Letterhead upload failed; check private Storage bucket and logs'},503);
-  // The revision counter must never decrease when an administrator selects an older default.
-  const {data:latest,error:latestError}=await db.from('institution_letterhead_versions').select('revision').order('revision',{ascending:false}).limit(1);
-  if(latestError){await db.storage.from('institution-letterheads').remove([path]);return json({error:'Letterhead version registry unavailable. Apply migration 034.'},503)}
-  const revision=Math.max(Number(latest?.[0]?.revision||0),Number(brand?.revision||0))+1;
-  const {error:registered}=await db.from('institution_letterhead_versions').insert({revision,file_path:path,image_mime:mime,uploaded_by:user.id});
-  if(registered){await db.storage.from('institution-letterheads').remove([path]);return json({error:'Unable to record the letterhead revision; retry upload.'},503)}
-  const {error:changed}=await db.from('institution_document_branding').update({file_path:path,image_mime:mime,revision,updated_at:new Date().toISOString(),updated_by:user.id}).eq('id',true);
-  if(changed){await db.from('institution_letterhead_versions').delete().eq('file_path',path);await db.storage.from('institution-letterheads').remove([path]);return json({error:'Could not publish the letterhead'},503)}
-  await db.from('audit_log').insert({actor:user.id,action:'institution_letterhead_uploaded',target:'document_branding',note:`Revision ${revision}`});
-  return json({ok:true,revision,message:'Letterhead published as the new default. Previously archived PDFs remain unchanged.'});
+  if(!mime||file.type!==mime)return failure('Only genuine PNG/JPEG logo images are accepted.');
+  try{const {PDFDocument}=await import('npm:pdf-lib@1.17.1');const pdf=await PDFDocument.create();
+   const img=png?await pdf.embedPng(raw):await pdf.embedJpg(raw);
+   if(img.width<100||img.height<100||img.width/img.height<0.82||img.width/img.height>5)
+    return failure('Use a compact logo rather than a full-page letterhead.');
+  }catch{return failure('The image could not be read.');}
+  const path=`logos/${crypto.randomUUID()}.${png?'png':'jpg'}`;
+  const {error:uploadErr}=await db.storage.from('institution-document-logos').upload(path,raw,{contentType:mime,upsert:false});
+  if(uploadErr)return failure('Logo upload failed.',503);
+  const {data:savedLogo,error:editErr}=await profiles.update({logo_path:path,logo_mime:mime,status:'draft',revision:profile.revision+1,
+    updated_at:new Date().toISOString(),updated_by:user.id}).eq('id',id).eq('is_default',false).eq('revision',profile.revision).select('id').maybeSingle();
+  if(editErr||!savedLogo){await db.storage.from('institution-document-logos').remove([path]);return failure('Identity changed before logo upload completed. Refresh and try again.',409);}
+  return json({ok:true,profile_id:id,message:'Logo saved to the draft. Publish the identity to use it on new documents.'});
+ }
+ if(!ct.includes('application/json'))return failure('Send identity settings as JSON or upload a logo.',415);
+ try{input=await req.json();}catch{return failure('Malformed JSON.');}
+ if(!input||Array.isArray(input)||typeof input!=='object')return failure('Invalid request body.');
+ const action=input.action||'save';
+ const profileId=parseId(input.profile_id);
+ if(action==='save'){
+  const raw:any={};
+  for(const f of allowedFields)raw[f]=textField(input[f],({organisation_name:130,organisation_tagline:150,
+   postal_address:300,phone:80,email:150,website:250,header_alignment:12} as any)[f]);
+  raw.label=textField(input.label||'Document identity',100);
+  if(raw.label.length<2||raw.organisation_name.length<3)return failure('Enter an identity label and official institution name.');
+  if(!['left','center'].includes(raw.header_alignment))return failure('Choose left or center alignment.');
+  if(raw.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.email))return failure('Enter a valid email.');
+  if(raw.website){let url:URL;try{url=new URL(raw.website)}catch{return failure('Enter an HTTPS website URL.');}
+   if(url.protocol!=='https:')return failure('Official website must use HTTPS.');}
+  const when=new Date().toISOString();
+  if(profileId){
+   const {data:old,error:lookupErr}=await profiles.select('*').eq('id',profileId).maybeSingle();
+   if(lookupErr||!old)return failure('Identity profile not found.',404);
+   if(!old.is_default){
+    const {data:saved,error}=await profiles.update({...raw,status:'draft',revision:old.revision+1,updated_at:when,updated_by:user.id})
+     .eq('id',profileId).eq('is_default',false).eq('revision',old.revision).select('id').maybeSingle();
+    if(error||!saved)return failure('Draft changed or became default. Reload before saving.',409);
+    return json({ok:true,profile_id:profileId,message:'Draft saved. Publish or mark as default to activate.'});
+   }
+   // Published identities are immutable through Save: create an independent draft.
+   raw.logo_path=old.logo_path;raw.logo_mime=old.logo_mime;
+  }
+  const {data:created,error}=await profiles.insert({...raw,is_default:false,status:'draft',updated_by:user.id,updated_at:when})
+   .select('id').single();
+  if(error||!created)return failure('Could not create identity draft.',503);
+  return json({ok:true,profile_id:created.id,message:'New identity draft saved. Publish to make it the default.'});
+ }
+ if(!profileId)return failure('Select a valid identity profile.');
+ const {data:profile,error:lookupErr}=await profiles.select('*').eq('id',profileId).maybeSingle();
+ if(lookupErr||!profile)return failure('Identity profile not found.',404);
+ if(action==='publish'||action==='set_default'){
+  const {data:revision,error}=await db.rpc('ahct_publish_document_identity',{p_profile:profileId,p_actor:user.id});
+  if(error)return failure('Unable to publish identity. '+error.message,503);
+  return json({ok:true,revision,profile_id:profileId,message:'Identity is now the default for new PDFs across every portal. Existing archived PDFs remain authentic and unchanged.'});
+ }
+ if(action==='delete'){
+  if(profile.is_default)return failure('Cannot delete the active default. Publish another identity first.',409);
+  const {data:deleted,error}=await profiles.delete().eq('id',profileId).eq('is_default',false).select('id').maybeSingle();
+  if(error||!deleted)return failure('Identity became default or could not be deleted. Refresh the list.',409);
+  await db.from('audit_log').insert({actor:user.id,action:'document_identity_draft_deleted',target:profileId,note:'Default identity and issued PDFs preserved'});
+  if(profile.logo_path)await removeOrphanedLogo(profile.logo_path);
+  return json({ok:true,message:'Non-default identity deleted.'});
+ }
+ if(action==='remove_logo'||action==='delete_published_logo'){
+  if(!profile.logo_path)return json({ok:true,message:'This identity has no logo.'});
+  if(profile.is_default){
+   const {error}=await db.rpc('ahct_remove_published_document_logo',{p_profile:profileId,p_actor:user.id});
+   if(error)return failure('Unable to remove live logo. '+error.message,503);
+  }else{
+   const {error}=await profiles.update({logo_path:null,logo_mime:null,status:'draft',revision:profile.revision+1,
+    updated_by:user.id,updated_at:new Date().toISOString()}).eq('id',profileId).eq('is_default',false);
+   if(error)return failure('Unable to remove draft logo.',503);
+  }
+  await removeOrphanedLogo(profile.logo_path);
+  return json({ok:true,message:profile.is_default?'Published logo removed. New PDFs use the AH monogram.':'Draft logo removed.'});
+ }
+ return failure('Unsupported identity operation.',400);
 }));

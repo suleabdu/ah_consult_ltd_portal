@@ -14,4 +14,6 @@ for f in tests/sql/phase2_smoke.sql tests/sql/phase11_release_smoke.sql tests/sq
 echo "posture  security_posture.sql"; psql -f tests/sql/security_posture.sql
 echo "hardening hardening_test.sql";  psql -At -f tests/sql/hardening_test.sql | grep -E "^(PASS|FAIL)"
 echo "homepage  homepage_test.sql";    psql -At -f tests/sql/homepage_test.sql  | grep -E "^(PASS|FAIL)"
+echo "designer  document_designer_posture.sql"; psql -f tests/sql/document_designer_posture.sql
+echo "native   native_document_studio_posture.sql"; psql -f tests/sql/native_document_studio_posture.sql
 echo "ALL SQL TESTS PASSED"

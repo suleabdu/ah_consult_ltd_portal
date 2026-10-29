@@ -12,6 +12,11 @@ verify_jwt = true
 [functions.document-verify]
 verify_jwt = false
 
+# User JWT is verified inside the function via auth.getUser(). Gateway JWT
+# checks can reject newer signing-key tokens before request-aware CORS runs.
+[functions.document-branding]
+verify_jwt = false
+
 # Local Supabase only. For the hosted project, configure the equivalent setting
 # in Supabase Dashboard > Authentication > Providers > Email > Confirm Email OFF.
 # With confirmations disabled, signUp returns a session and applicants enter

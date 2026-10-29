@@ -81,7 +81,7 @@ Deno.serve(safe(async (req) => {
     if(!prov)return json({paid:false,receipt_status:"missing_verified_payment",note:"The configured payment provider is unavailable."});
     const result=await verifyPayment(prov,app);
     if(!result.paid)return json({paid:false,receipt_status:"missing_verified_payment",note:result.note||"Payment not yet verified."});
-    await markPaid(db,app,result.amount??app.total_ngn,app.pay_gateway_ref?"UL-"+app.pay_gateway_ref:null,{source:"verify",note:result.note});
+    await markPaid(db,app,result.amount??app.total_ngn,app.pay_gateway_ref?"UL-"+app.pay_gateway_ref:null,{source:"verify",note:result.note,provider_evidence:result.evidence||{}});
     await kickSheetSync();
   }else if(!alreadyPaid){
     return json({paid:false,receipt_status:"missing_verified_payment",note:"This application is not awaiting payment verification."});

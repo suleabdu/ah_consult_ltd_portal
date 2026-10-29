@@ -58,7 +58,8 @@ fn_dirs = sorted(p.name for p in FUNCS.iterdir() if p.is_dir() and not p.name.st
 check("every function has index.ts", all((FUNCS / d / "index.ts").exists() for d in fn_dirs))
 cfg = text(ROOT / "supabase" / "config.toml")
 open_fns = sorted(re.findall(r"\[functions\.([a-z-]+)\]\s*verify_jwt\s*=\s*false", cfg))
-check("only explicitly expected public endpoints skip JWT verification", open_fns == ["admin-register", "document-verify", "payment-webhook", "upperlink-webhook"], str(open_fns))
+# document-branding performs verified user auth + admin role checks inside the handler.
+check("only explicitly expected gateway JWT exceptions (all with handler-side checks)", open_fns == ["admin-register", "document-branding", "document-verify", "payment-webhook", "upperlink-webhook"] and "userFrom(req)" in text(FUNCS / "document-branding" / "index.ts"), str(open_fns))
 check("sheet-review (two-way sheet control) is gone", "sheet-review" not in fn_dirs and "sheet-review" not in cfg)
 for name in ("deploy-functions.sh", "deploy-functions.ps1", "check-setup.sh", "check-setup.ps1"):
     listed = set(re.findall(r"[a-z]+(?:-[a-z]+)+", text(ROOT / "scripts" / name)))

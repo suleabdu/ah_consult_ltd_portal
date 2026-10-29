@@ -6,6 +6,7 @@ const ROLE_INFO={administrator:'Full access. Approves staff, changes roles, dele
 const READ=['administrator','registrar','finance','academic','operations','viewer'];
 const PERM={pay:['administrator','finance'],adm:['administrator','registrar'],intake:['administrator','registrar','academic'],lect:['administrator','academic'],del:['administrator']};
 const NAV=[['overview','Overview',READ],['apps',L.people,READ],['deferments','Deferments',READ],['payments','Payments',['administrator','finance']],['intakes',L.intakes,READ],['lecturers',L.lecturers,READ],['team','Team & Access',['administrator']],['danger','Data & Deletion',['administrator']]];
+const DOC_TEMPLATE_TYPES=Object.freeze([['admission_letter','Admission letter'],['deferment_letter','Deferment letter'],['payment_receipt','Payment receipt'],['academic_transcript','Transcript'],['result_statement','Result statement'],['certificate','Certificate']]);
 const $=s=>document.querySelector(s),C=window.APPLY_CONFIG,esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),naira=n=>'\u20A6'+Number(n||0).toLocaleString();
 const gate=t=>{$('#gate').hidden=false;$('#gate').innerHTML=t};
 if(!window.supabase||!C||!C.SUPABASE_URL){gate('Setup problem: js/config.js did not load.')}
@@ -18,7 +19,7 @@ async function start(){
  if(me.role==='tutor')return location.replace('tutor.html');
  const isAdmin=me.role==='administrator',lvl=m=>isAdmin?'write':(((D.perms||[]).find(p=>p.role===me.role&&p.module===m)||{}).level||((FALLBACK[me.role]||{})[m])||'none'),can=k=>({pay:lvl('payments')==='write',adm:lvl('applications')==='write',intake:lvl('intakes')==='write',lect:lvl('lecturers')==='write',del:isAdmin})[k];
  $('#gate').hidden=true;$('#app').hidden=false;$('#me').innerHTML=esc(me.full_name)+' <span class="role">'+esc(ROLES[me.role]||me.role)+'</span>';$('#orgName').textContent=L.org;$('#yr').textContent=new Date().getFullYear();
- const D={apps:[],courses:[],intakes:[],lects:[],lc:[],lectures:[],assigns:[],fb:[],staff:[],audit:[],sync:null,errs:[],perms:[],prov:[],site:{},codes:[],adds:[],deferments:[],lectStats:[],tutorAccounts:[]};let view='overview',F={q:'',st:'',intake:'',course:''},DQ='';const selectedApps=new Set();
+ const D={apps:[],courses:[],intakes:[],lects:[],lc:[],lectures:[],assigns:[],fb:[],staff:[],audit:[],sync:null,errs:[],perms:[],prov:[],site:{},codes:[],adds:[],deferments:[],lectStats:[],tutorAccounts:[]};let view='overview',F={q:'',st:'',intake:'',course:''},DQ='';const selectedApps=new Set();let designerSelectedKind='admission_letter';
  const signOut=exp=>{try{const pending=sb.auth.signOut({scope:'local'});if(pending&&typeof pending.catch==='function')pending.catch(()=>{})}catch(_){}try{const ref=new URL(C.SUPABASE_URL).hostname.split('.')[0],key='sb-'+ref+'-auth-token';[localStorage,sessionStorage].forEach(store=>{store.removeItem(key);store.removeItem(key+'-code-verifier')})}catch(_){}location.replace('staff-login.html'+(exp?'?expired=1':''))};$('#so').onclick=()=>signOut();
  let idle;const bump=()=>{clearTimeout(idle);idle=setTimeout(()=>signOut(true),30*60*1000)};['click','keydown','touchstart','mousemove'].forEach(e=>addEventListener(e,bump,{passive:true}));bump();
  const toast=(m,e)=>{const t=document.createElement('div');t.className='toast'+(e?' e':'');t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),e?7000:3500)};
@@ -81,7 +82,7 @@ async function start(){
   <select id="fc"><option value="">All ${L.courses.toLowerCase()}</option>${D.courses.map(c=>`<option value="${c.code}" ${F.course===c.code?'selected':''}>${esc(c.name)} (${esc(c.category)})</option>`).join('')}</select><button class="btn g" id="csv">Export CSV</button></div>
   <div class="panel bulk-panel" aria-label="Bulk application actions"><div class="row" style="align-items:center;margin:0">
   <label><input type="checkbox" id="allApps" aria-label="Select all visible applications"> Select all visible</label><b id="selectedCount">${selectedApps.size} selected</b>
-  <select class="sel" id="bulkAction" aria-label="Bulk action"><option value="">Choose action…</option>${can('adm')?'<option value="approved">Admit</option><option value="rejected">Reject</option><option value="letter">Issue admission letters</option><option value="results">Issue published results</option><option value="transcript">Issue published transcripts</option>':''}${isAdmin?'<option value="delete">Permanently delete non-admitted</option>':''}</select>
+  <select class="sel" id="bulkAction" aria-label="Bulk action"><option value="">Choose action…</option>${can('adm')?'<option value="approved">Admit</option><option value="rejected">Reject</option><option value="letter">Issue admission letters</option>':''}${me.role==='registrar'?'<option value="results">Issue registrar-approved results</option><option value="transcript">Issue registrar-approved final transcripts</option>':''}${isAdmin?'<option value="delete">Permanently delete non-admitted</option>':''}</select>
   <button type="button" class="btn" id="runBulk" ${selectedApps.size?'':'disabled'}>Apply to selected</button></div>
   <p class="sub" style="margin:8px 0 0">Up to 25 records per action. Admission and grades are checked by the database. Deletions keep financial transactions and are blocked for admitted/issued records.</p></div>
   <p class="sub" id="cnt">${filtered().length} shown</p>${tbl(H,rows)}`};
@@ -343,7 +344,7 @@ async function start(){
 
  /* ================= PHASE 8: INTELLIGENCE + STUDENT 360 ================= */
  const fmtDate=x=>x?new Date(x).toLocaleString():'';
- const docTitle={admission_letter:'Admission Letter',payment_receipt:'Payment Receipt',academic_transcript:'Academic Transcript',certificate:'Certificate of Completion'};
+ const docTitle={admission_letter:'Admission Letter',deferment_letter:'Deferment Letter',payment_receipt:'Payment Receipt',academic_transcript:'Academic Transcript',result_statement:'Academic Result Statement',certificate:'Certificate of Completion'};
  const printDocument=async(d,key)=>{
    const app=d.application||{};if(!app.id)return toast('Select a valid student application.',1);
    try{
@@ -377,14 +378,34 @@ async function start(){
    <div class="panel"><div class="tools"><input id="documentSearch" aria-label="Search student records" placeholder="Search by name, student ID or email" autocomplete="off"><button class="btn" id="documentFind">Find student</button></div>
    <p class="sub">${rows.length} admitted student(s) listed${D.apps.length>=1000?' (first 1000 applications fetched; refine the search for older records)':''}.</p>
    ${tbl(H,rows.map(a=>trow(H,[`<b>${esc(name(a))}</b><br><small>${esc(a.profiles?.email||'')}</small>`,esc(a.student_id||'Pending'),esc(a.intakes?.label||''),'<span class="pill ok">Admitted</span>',`<button type="button" class="btn s g" data-doc-student="${a.id}">Open documents</button>`])))}</div>
-   <div class="panel"><h3>Official document safeguards</h3><p class="sub">Print or download only issued PDF copies. Results and transcripts require published examinations and student portal enrolment. Every generated official copy is archived with an integrity fingerprint.</p></div>`};
- V.docTemplates=()=>`<h1>Document designer</h1><p class="sub">One branded letterhead for every document, with document-specific text and authorised signatories. Previously issued PDFs remain unchanged when the design is updated.</p>
-  <div class="panel"><h3>Official company letterhead</h3><p class="sub">Upload an A4-proportioned PNG or JPEG image (up to 8 MB). Keep the central writing area clear. The uploaded image will be used on every page of newly issued PDFs.</p>
-  <input type="file" id="letterheadUpload" class="in" accept="image/png,image/jpeg" aria-label="Upload institution letterhead"><div class="row"><button class="btn" id="saveLetterhead" type="button">Upload &amp; publish letterhead</button><button class="btn g" id="showLetterhead" type="button">Preview current letterhead</button></div><div class="grid"><label>Content starts below letterhead (mm)<input class="in" id="letterheadTop" type="number" min="25" max="120" step="1" value="85"></label><label>Bottom safe area (mm)<input class="in" id="letterheadBottom" type="number" min="12" max="60" step="1" value="20"></label></div><div class="row"><button class="btn g" id="saveLetterheadMargins" type="button">Save safe areas</button><span id="letterheadRevision" class="sub">Approved stationery</span></div><p id="letterheadFeedback" class="sub" role="status">PNG/JPEG only · Server validates file size and format.</p><div id="letterheadPreview" hidden style="max-width:320px;margin-top:12px"></div><div style="margin-top:18px"><h4>Published letterhead library</h4><p class="sub">Select any active version as the default. Archive an unused old version without deleting historical storage or previously issued PDFs.</p><div id="letterheadLibrary" aria-live="polite">Loading available versions…</div></div></div>
-  <div class="panel"><label>Document type<select class="in" id="docKind"><option value="admission_letter">Admission letter</option><option value="deferment_letter">Deferment letter</option><option value="payment_receipt">Payment receipt</option><option value="academic_transcript">Transcript</option><option value="result_statement">Academic result statement</option><option value="certificate">Certificate</option></select></label>
-  <p id="templateStatus" class="sub" role="status">Loading published revision…</p><div class="grid"><label>Authorized person<input class="in" id="docSign" maxlength="150"></label><label>Position / title<input class="in" id="docTitle" maxlength="150"></label></div><label>Body text<textarea id="docBody" rows="7" maxlength="6000" placeholder="Write the wording or insert an approved data field."></textarea></label><div class="row"><select id="docField" class="in" aria-label="Insert data field"><option value="student_name">Student name</option><option value="student_id">Student ID</option><option value="intake">Training intake</option><option value="programme">Programme / courses</option><option value="payment_reference">Payment reference</option><option value="payment_amount">Verified amount</option><option value="issue_date">Issue date</option><option value="document_reference">Document reference</option></select><button type="button" class="btn g" id="insertDocField">Insert field in body</button></div><label>Footer / contact<textarea id="docFooter" rows="2" maxlength="500"></textarea></label><div class="row"><button class="btn" id="saveDocTemplate">Save draft</button><button class="btn g" id="previewDocTemplate">Preview actual PDF</button><button class="btn g" id="publishDocTemplate">Publish approved revision</button></div><h4>Published revision history</h4><div id="docVersionHistory" role="region" aria-label="Published template versions"><p class="sub">Loading revision history…</p></div>
+   <div class="panel"><h3>Academic issuance authorization</h3><p class="sub">An academic officer reviews published results first. A different registrar must approve before a final transcript or statement may be issued. Administrators cannot approve academic awards by default.</p>
+   <div class="grid"><label>Student / application<select id="docApprovalApplication" class="in"><option value="">Select student</option>${rows.map(a=>`<option value="${a.id}">${esc(name(a))} · ${esc(a.student_id||String(a.id).slice(0,8))}</option>`).join('')}</select></label><label>Document<select class="in" id="docApprovalType"><option value="result_statement">Statement of results (published results only)</option><option value="academic_transcript">Final academic transcript (all courses)</option></select></label></div>
+   <label>Evidence and decision note<textarea id="docApprovalNote" class="in" maxlength="600" rows="2" placeholder="Record source records reviewed (minimum 10 characters)"></textarea></label>
+   <div class="row"><button type="button" id="docCheckEligibility" class="btn g">Check eligibility</button><button type="button" id="docApproveIssuance" class="btn" ${['academic','registrar'].includes(me.role)?'':'disabled'}>${me.role==='academic'?'Record academic review':me.role==='registrar'?'Approve as registrar':'Requires academic / registrar account'}</button></div><p class="sub" id="docEligibilityFeedback" role="status">Certificates remain on hold pending a formally approved completion and award policy.</p></div>
+   <div class="panel"><h3>Official document safeguards</h3><p class="sub">Print or download only issued PDF copies. Academic records require authorization, a verified grade scope and student portal enrolment. Every generated official copy is archived with an integrity fingerprint.</p></div>`};
+ V.docTemplates=()=>`<h1>Document designer</h1><p class="sub">Native branded PDF documents generated from verified institutional identity, with independent text templates and authorised signatory names. Previously issued PDFs are unchanged.</p>
+  <div class="panel" id="documentDesignerTemplates"><h3>Document templates</h3><p class="sub">Choose a document tab. Each type has its own published template, private draft, and revision history. Publishing updates future documents throughout the application, student, tutor and administrative portals.</p>
+  <div id="docTemplateTabs" class="doc-template-tabs" role="tablist" aria-label="Document template types">${DOC_TEMPLATE_TYPES.map(([key,label])=>`<button type="button" role="tab" class="doc-template-tab" id="doc-tab-${key}" data-template-tab="${key}" aria-controls="docTemplateEditor" aria-selected="${designerSelectedKind===key?'true':'false'}" tabindex="${designerSelectedKind===key?'0':'-1'}">${label}</button>`).join('')}</div>
+  <p class="doc-template-swipe-hint">Swipe the tabs sideways to see all document types.</p>
+  <input type="hidden" id="docKind" value="${designerSelectedKind}">
+  <div id="docTemplateEditor" role="tabpanel" aria-labelledby="doc-tab-${designerSelectedKind}" tabindex="0"><div class="doc-template-heading"><h3 id="docTemplateHeading">${esc(DOC_TEMPLATE_TYPES.find(([key])=>key===designerSelectedKind)?.[1]||'Document template')}</h3><span class="pill info" id="docTemplateCurrentLabel">Loading…</span></div>
+  <p id="templateStatus" class="sub" role="status" aria-live="polite">Loading published revision…</p><div class="grid"><label>Authorized person<input class="in" id="docSign" maxlength="150"></label><label>Position / title<input class="in" id="docTitle" maxlength="150"></label></div><label>Body text<textarea id="docBody" rows="7" maxlength="6000" placeholder="Write the wording or insert an approved data field."></textarea></label><div class="row"><select id="docField" class="in" aria-label="Insert data field"><option value="student_name">Student name</option><option value="student_id">Student ID</option><option value="intake">Training intake</option><option value="programme">Programme / courses</option><option value="payment_reference">Payment reference</option><option value="payment_amount">Verified amount</option><option value="issue_date">Issue date</option><option value="document_reference">Document reference</option></select><button type="button" class="btn g" id="insertDocField">Insert field in body</button></div><label>Footer / contact<textarea id="docFooter" rows="2" maxlength="500"></textarea></label><div class="row"><button class="btn" id="saveDocTemplate">Save draft</button><button class="btn g" id="previewDocTemplate">Preview actual PDF</button><button class="btn g" id="publishDocTemplate">Publish approved revision</button><button type="button" class="btn r" id="deleteDocDraft" disabled>Delete saved draft</button></div><h4>Saved template revisions</h4><p class="sub">Only the current published revision is used for new PDFs. Delete removes a superseded revision from the designer, but retains its audit snapshot and any already issued documents. To replace the current revision, save and publish a new draft first.</p><div id="docVersionHistory" role="region" aria-label="Published template versions"><p class="sub">Loading revision history…</p></div>
   <div class="row" style="margin-top:14px;align-items:center"><button type="button" class="btn g" id="retryOfficialReceipts">Process pending verified receipts</button><span id="receiptWorkerFeedback" class="sub" role="status">Secure queue recovery for previously verified transactions.</span></div>
-  <p class="sub">PDF preview uses the same renderer as official issuance, with sample data and a visible NOT ISSUED stamp. The preview is never archived or issued.</p><p class="sub">PDF distribution is private and archived with SHA-256 fingerprints. A trusted digital signing service is still required for independently verifiable tamper-evident signatures.</p></div>`;
+  <p class="sub">PDF preview uses the same renderer as official issuance, with sample data and a visible NOT ISSUED stamp. The preview is never archived or issued.</p><p class="sub">PDF distribution is private and archived with SHA-256 fingerprints. A trusted digital signing service is still required for independently verifiable tamper-evident signatures.</p></div></div>
+  <div class="panel" id="nativeIdentityPanel"><h3>Institutional PDF identities</h3>
+  <p class="sub">Save several native document styles, then publish one as the institution-wide default. The default applies to newly issued PDFs across all portals. Archived originals cannot be silently replaced; authorized certified copies can be issued separately.</p>
+  <div class="grid"><label>Saved identities<select class="in" id="nativeProfilePicker" aria-label="Saved institutional identities"><option value="">Loading…</option></select></label>
+  <label>Style name<input class="in" id="nativeProfileLabel" maxlength="100" placeholder="e.g. Official institutional style"></label></div>
+  <div class="row"><button type="button" class="btn g" id="newNativeIdentity">New identity</button><button type="button" class="btn" id="saveNativeIdentity">Save identity draft</button><button type="button" class="btn" id="publishNativeIdentity">Publish / Set default</button><button type="button" class="btn r" id="deleteNativeIdentity">Delete selected identity</button></div>
+  <p class="sub" id="nativeIdentityRevision" role="status" aria-live="polite">Loading profiles…</p>
+  <div class="grid"><label>Institution name<input class="in" id="nativeName" maxlength="130" required></label><label>Tagline<input class="in" id="nativeTagline" maxlength="150"></label></div>
+  <label>Official postal address<textarea class="in" id="nativeAddress" rows="2" maxlength="300" placeholder="Enter the official address"></textarea></label>
+  <div class="grid"><label>Telephone<input class="in" id="nativePhone" maxlength="80"></label><label>Contact email<input class="in" id="nativeEmail" type="email" maxlength="150"></label></div>
+  <div class="grid"><label>Official website (HTTPS)<input class="in" id="nativeWebsite" type="url" maxlength="250" placeholder="https://"></label><label>Masthead alignment<select class="in" id="nativeAlign"><option value="left">Left aligned</option><option value="center">Centered</option></select></label></div>
+  <div class="row" style="margin-top:12px"><label>Compact logo (PNG/JPEG, max 1 MB)<input class="in" id="nativeLogoUpload" type="file" accept="image/png,image/jpeg"></label><button type="button" class="btn g" id="uploadNativeLogo">Save logo to draft</button><button type="button" class="btn r" id="removeNativeLogo">Delete selected logo</button></div>
+  <div id="nativeLogoPreview" class="sub" role="status" aria-live="polite"></div>
+  <p class="sub" id="nativeIdentityFeedback" role="status">Changing branding does not change the contents or integrity hashes of previously archived PDFs.</p>
+  </div>`;
  V.intelligence=()=>`<h1>Institutional Intelligence</h1><p class="sub">Management KPIs, admissions conversion, academic publication and operational health — refreshed from Supabase.</p><div id="aiKpi" class="cards"><div class="card"><small>Loading</small><b>…</b></div></div><div class="two"><div class="panel"><h3>Application status</h3><div id="aiStatus"><p class="sub">Loading analytics…</p></div></div><div class="panel"><h3>Course demand</h3><div id="aiCourses"><p class="sub">Loading analytics…</p></div></div></div><div class="panel"><h3>Student 360°</h3><p class="sub">Open a complete operational student profile without navigating through multiple modules.</p><button class="btn" id="open360">Open Student 360°</button></div>`;
  V.release=()=>`<h1>Release Readiness</h1><p class="sub">Administrator and Academic Coordinator checks for schema integrity, RLS coverage, security-definer search paths, academic score privacy, result constraints, course catalog alignment and processing queues. Run this on staging before production; it does not replace user-journey testing.</p><div class="row" style="margin:0 0 12px"><button class="btn" id="runReleaseChecks">Run checks</button><button class="btn g" id="loadLegacyArchive">Review legacy score archive</button><span id="releaseRunMeta" class="sub" style="margin:0;align-self:center"></span></div><div id="releaseSummary" class="cards" role="status" aria-live="polite"><div class="card"><small>Status</small><b>Not run</b></div></div><div id="releaseChecks" class="panel" aria-live="polite"><p class="sub">Run the release checks to inspect your staging database.</p></div><div id="legacyArchivePanel" class="panel" hidden><h3>Archived legacy results</h3><p class="sub">Read-only historical components retained before grading model reconciliation.</p><div id="legacyArchiveRows"></div></div>`;
  V.audit=()=>`<h1>Audit Centre</h1><p class="sub">Administrator-only operational history. Use this to trace admissions, payments, staff actions and document events.</p><div class="tools"><select id="auditAction"><option value="">All actions</option></select><button class="btn" id="auditRefresh">Refresh</button></div><div id="auditRows" class="panel"><p class="sub">Loading audit history…</p></div>`;
@@ -453,44 +474,192 @@ async function start(){
   if(view==='team'){const n=$('#newCode');if(n)n.onclick=newCodeDialog;
    M.querySelectorAll('[data-ac]').forEach(b=>b.onclick=async()=>{try{if(b.dataset.ac==='toggle')await api('admin-settings',{action:'code_toggle',id:b.dataset.id,active:b.dataset.on!=='true'});else{if(!confirm('Delete this code? People who have not registered yet will no longer be able to use it.'))return;await api('admin-settings',{action:'code_delete',id:b.dataset.id})}await load();render(true)}catch(err){toast(err.message,1)}})}
   if(view==='docTemplates'&&isAdmin){const k=$('#docKind'),fields={body_text:$('#docBody'),signatory_name:$('#docSign'),signatory_title:$('#docTitle'),footer_text:$('#docFooter')};
-    const get=async()=>{const r=await sb.rpc('admin_read_document_draft',{p_key:k.value});if(r.error)return toast(r.error.message,1);Object.entries(fields).forEach(([n,el])=>el.value=r.data?.[n]||'');$('#templateStatus').textContent=`Published v${r.data?.published_version||'?'} · ${r.data?.has_draft?'Unpublished draft exists':'No draft changes'}`;const h=await sb.rpc('admin_list_document_template_versions',{p_key:k.value});const history=$('#docVersionHistory');if(h.error){history.textContent='Revision history unavailable';return;}history.replaceChildren();for(const rev of h.data||[]){const row=document.createElement('div');row.className='row';row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #e5e7eb';const info=document.createElement('span');info.textContent=`Revision ${rev.version} · ${rev.date?new Date(rev.date).toLocaleString('en-GB'):'Date unavailable'}${rev.restorable?'':' · Legacy snapshot incomplete'}`;row.append(info);if(rev.restorable){const btn=document.createElement('button');btn.type='button';btn.className='btn g s';btn.textContent='Copy to draft';btn.onclick=async()=>{if(!confirm(`Copy revision ${rev.version} into the draft? Current unpublished edits will be replaced.`))return;const x=await sb.rpc('admin_restore_document_version_as_draft',{p_key:k.value,p_version:rev.version});if(x.error)return toast(x.error.message,1);toast('Historical wording restored as an unpublished draft.');get();};row.append(btn);}history.append(row);}if(!h.data?.length)history.textContent='No historical versions';};k.onchange=get;get();
-    $('#insertDocField').onclick=()=>{const textarea=fields.body_text;const field='{{'+$('#docField').value+'}}';const start=textarea.selectionStart??textarea.value.length,end=textarea.selectionEnd??start;textarea.setRangeText(field,start,end,'end');textarea.focus();};
+    let loadSequence=0,editGeneration=0,dirty=false,busy=false,hasSavedDraft=false;
+    const tabs=[...document.querySelectorAll('[data-template-tab]')];
+    const markDirty=()=>{dirty=true;editGeneration++;const status=$('#templateStatus');if(status)status.textContent='Unsaved edits · Save draft before switching document tabs or publishing.';};
+    Object.values(fields).forEach(el=>el.addEventListener('input',markDirty));
+    const selectTab=key=>{
+      if(key===k.value||!DOC_TEMPLATE_TYPES.some(([id])=>id===key))return;
+      if(busy)return toast('Complete the current template action before changing tabs.',1);
+      if(dirty&&!confirm('Discard unsaved text changes and switch document templates?'))return;
+      k.value=key;designerSelectedKind=key;dirty=false;hasSavedDraft=false;editGeneration++;
+      tabs.forEach(t=>{const selected=t.dataset.templateTab===key;t.setAttribute('aria-selected',String(selected));t.tabIndex=selected?0:-1;});
+      $('#docTemplateEditor').setAttribute('aria-labelledby','doc-tab-'+key);
+      $('#docTemplateHeading').textContent=DOC_TEMPLATE_TYPES.find(([id])=>id===key)[1];
+      $('#docTemplateCurrentLabel').textContent='Loading…';$('#deleteDocDraft').disabled=true;
+      $('#templateStatus').textContent='Loading published template…';$('#docVersionHistory').textContent='Loading revision history…';
+      Object.values(fields).forEach(el=>el.value='');
+      void get();
+    };
+    tabs.forEach(tab=>{
+      tab.addEventListener('click',()=>selectTab(tab.dataset.templateTab));
+      tab.addEventListener('keydown',event=>{
+        const offset=event.key==='ArrowRight'?1:event.key==='ArrowLeft'?-1:0;
+        if(!offset&&event.key!=='Home'&&event.key!=='End')return;
+        event.preventDefault();const index=tabs.indexOf(tab),next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+offset+tabs.length)%tabs.length;
+        const target=tabs[next];selectTab(target.dataset.templateTab);
+        if(target.getAttribute('aria-selected')==='true')target.focus();
+      });
+    });
+    const get=async()=>{
+      const selectedKey=k.value,sequence=++loadSequence,generation=editGeneration;
+      try{
+        const r=await sb.rpc('admin_read_document_draft',{p_key:selectedKey});
+        if(!document.contains(k)||selectedKey!==k.value||sequence!==loadSequence||generation!==editGeneration)return;
+        if(r.error)throw r.error;
+        Object.entries(fields).forEach(([field,el])=>el.value=r.data?.[field]||'');
+        dirty=false;hasSavedDraft=Boolean(r.data?.has_draft);
+        const currentVersion=Number(r.data?.published_version)||0;
+        $('#templateStatus').textContent=`Published v${currentVersion||'?'} · ${hasSavedDraft?'Saved unpublished draft':'No saved draft'}`;
+        $('#docTemplateCurrentLabel').textContent=`Current version ${currentVersion||'—'}`;
+        $('#deleteDocDraft').disabled=!hasSavedDraft;
+        const h=await sb.rpc('admin_list_document_template_versions',{p_key:selectedKey});
+        if(!document.contains(k)||selectedKey!==k.value||sequence!==loadSequence)return;
+        const history=$('#docVersionHistory');
+        if(h.error){history.textContent='Revision history unavailable: '+h.error.message;return;}
+        history.replaceChildren();
+        for(const rev of h.data||[]){
+          const isCurrent=Number(rev.version)===currentVersion;
+          const row=document.createElement('div');row.className='doc-template-revision';
+          const info=document.createElement('span');info.className='doc-revision-info';
+          info.textContent=`Revision ${rev.version} · ${rev.date?new Date(rev.date).toLocaleString('en-GB'):'Date unavailable'}${isCurrent?' · CURRENT (protected)':''}${rev.restorable?'':' · Legacy snapshot incomplete'}`;
+          row.append(info);
+          if(rev.restorable){const restore=document.createElement('button');restore.type='button';restore.className='btn g s';restore.textContent='Copy to draft';restore.onclick=async()=>{
+            if(busy)return;if(dirty&&!confirm('Discard unsaved changes?'))return;
+            if(!confirm(`Copy ${selectedKey.replaceAll('_',' ')} revision ${rev.version} into the draft? It will not become live until published.`))return;
+            busy=true;restore.disabled=true;
+            try{const x=await sb.rpc('admin_restore_document_version_as_draft',{p_key:selectedKey,p_version:rev.version});if(x.error)throw x.error;toast('Revision copied into an unpublished draft.');await get();}
+            catch(err){toast(err.message||'Could not restore revision',1)}finally{busy=false;restore.disabled=false;}
+          };row.append(restore);}
+          if(!isCurrent){const remove=document.createElement('button');remove.type='button';remove.className='btn r s';remove.textContent='Delete revision';remove.setAttribute('aria-label',`Delete superseded revision ${rev.version} of ${selectedKey.replaceAll('_',' ')}`);
+            remove.onclick=async()=>{
+              if(busy)return;
+              const reason=await askNote(`Delete revision ${rev.version}?`,'Reason for removal (at least 10 characters). Issued PDFs and the audit record are preserved.','Delete revision');
+              if(reason===null)return;
+              if(reason.length<10)return toast('Please provide a reason of at least 10 characters.',1);
+              if(!confirm(`Remove revision ${rev.version} from ${selectedKey.replaceAll('_',' ')} history? The published revision and previously issued PDFs are unaffected.`))return;
+              busy=true;remove.disabled=true;
+              try{const x=await sb.rpc('admin_retire_document_template_revision',{p_key:selectedKey,p_version:rev.version,p_reason:reason});if(x.error)throw x.error;toast('Old revision removed from active designer history.');await get();}
+              catch(err){toast(err.message||'Could not delete revision',1)}finally{busy=false;remove.disabled=false;}
+            };row.append(remove);
+          }else{const active=document.createElement('span');active.className='pill ok';active.textContent='Active · cannot delete';row.append(active);}
+          history.append(row);
+        }
+        if(!h.data?.length)history.textContent='No saved template revisions for this document.';
+      }catch(err){if(document.contains(k)&&selectedKey===k.value&&sequence===loadSequence){$('#templateStatus').textContent='Unable to load template: '+(err.message||'Unknown error');toast(err.message||'Could not load document template',1);}}
+    };
+    void get();
+    $('#insertDocField').onclick=()=>{const textarea=fields.body_text,field='{{'+$('#docField').value+'}}',start=textarea.selectionStart??textarea.value.length,end=textarea.selectionEnd??start;textarea.setRangeText(field,start,end,'end');markDirty();textarea.focus();};
+    $('#deleteDocDraft').onclick=async e=>{
+      if(busy||!hasSavedDraft)return;
+      if(!confirm('Delete the saved unpublished draft for this document? The current approved template will be reloaded and all issued PDFs remain unchanged.'))return;
+      const key=k.value;busy=true;e.currentTarget.disabled=true;
+      try{const rr=await sb.rpc('admin_delete_document_template_draft',{p_key:key});if(rr.error)throw rr.error;dirty=false;editGeneration++;toast('Unpublished template draft deleted.');await get();}
+      catch(err){toast(err.message||'Could not delete draft',1)}finally{busy=false;const deleteButton=$('#deleteDocDraft');if(deleteButton)deleteButton.disabled=!hasSavedDraft;}
+    };
     $('#retryOfficialReceipts').onclick=async e=>{
       const button=e.currentTarget,feedback=$('#receiptWorkerFeedback');button.disabled=true;button.textContent='Issuing receipts…';
-      try{const result=await api('document-issue',{limit:20});feedback.textContent=`Archived ${result.issued||0} official receipt(s); ${result.failed||0} pending attempt(s) need attention.`;if(result.failed)toast('Some receipts require investigation. Check Edge Function logs and published letterhead.',1);else toast('Pending verified receipts processed.');}
+      try{const result=await api('document-issue',{limit:20});feedback.textContent=`Archived ${result.issued||0} official receipt(s); ${result.failed||0} pending attempt(s) need attention.`;if(result.failed)toast('Some receipts require investigation. Check Edge Function logs and institutional identity settings.',1);else toast('Pending verified receipts processed.');}
       catch(err){feedback.textContent=err.message||'Receipt issuance unavailable';toast(feedback.textContent,1)}
       finally{button.disabled=false;button.textContent='Process pending verified receipts';}
     };
-    $('#saveDocTemplate').onclick=async e=>{e.target.disabled=true;const rr=await sb.rpc('admin_save_document_template_draft',{p_key:k.value,p_body:fields.body_text.value,p_signatory:fields.signatory_name.value,p_title:fields.signatory_title.value,p_footer:fields.footer_text.value});e.target.disabled=false;if(rr.error)return toast(rr.error.message,1);toast('Unpublished draft saved.');await get();};
-    $('#publishDocTemplate').onclick=async e=>{if(!confirm('Publish this template to all future official documents? Already archived PDFs will not change. Save your edits as a draft first.'))return;const b=e.target;b.disabled=true;try{const x=await sb.rpc('admin_publish_document_template_draft',{p_key:k.value});if(x.error)throw x.error;toast('Approved revision '+x.data+' published.');await get();}catch(err){toast(err.message,1)}finally{b.disabled=false;}};
+    $('#saveDocTemplate').onclick=async e=>{
+      if(busy)return;const key=k.value,b=e.currentTarget;busy=true;b.disabled=true;
+      try{const rr=await sb.rpc('admin_save_document_template_draft',{p_key:key,p_body:fields.body_text.value,p_signatory:fields.signatory_name.value,p_title:fields.signatory_title.value,p_footer:fields.footer_text.value});if(rr.error)throw rr.error;dirty=false;editGeneration++;toast('Unpublished draft saved.');await get();}
+      catch(err){toast(err.message||'Could not save draft',1)}finally{busy=false;b.disabled=false;}
+    };
+    $('#publishDocTemplate').onclick=async e=>{
+      if(busy)return;if(dirty)return toast('Save the latest changes as a draft before publishing.',1);
+      if(!hasSavedDraft)return toast('Save a draft before publishing.',1);
+      if(!confirm("Publish this document type's approved template to all future official PDFs? Previously archived PDFs will not change."))return;
+      const key=k.value,b=e.currentTarget;busy=true;b.disabled=true;
+      try{const x=await sb.rpc('admin_publish_document_template_draft',{p_key:key});if(x.error)throw x.error;toast('Approved revision '+x.data+' published for all new documents.');await get();}
+      catch(err){toast(err.message||'Could not publish template',1)}finally{busy=false;b.disabled=false;}
+    };
     $('#previewDocTemplate').onclick=async e=>{
       e.target.disabled=true;try{
         const {data:{session}}=await sb.auth.getSession();if(!session)throw Error('Sign in required');
         const r=await fetch(fnUrl('student-document'),{method:'POST',headers:{'Content-Type':'application/json',apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+session.access_token},body:JSON.stringify({preview:true,document_key:k.value,template:Object.fromEntries(Object.entries(fields).map(([key,input])=>[key,input.value]))})});
         if(!r.ok){const x=await r.json().catch(()=>({}));throw Error(x.error||'Preview could not be rendered');}
-        const url=URL.createObjectURL(await r.blob());const m=modal('<h3>Actual PDF preview · Not issued</h3><p class="sub">Sample student information; current published letterhead and your unsaved wording.</p><iframe title="Document PDF preview" style="width:100%;height:65vh;border:1px solid #ddd" allow="fullscreen"></iframe><div class="row"><button class="btn g" id="close">Close</button></div>');m.querySelector('.mbox').style.maxWidth='830px';m.querySelector('iframe').src=url;m.querySelector('#close').onclick=()=>{URL.revokeObjectURL(url);m.remove()};
+        const url=URL.createObjectURL(await r.blob());const m=modal('<h3>Actual PDF preview · Not issued</h3><p class="sub">Sample student information; current native institutional identity and your unsaved wording.</p><iframe title="Document PDF preview" style="width:100%;height:65vh;border:1px solid #ddd" allow="fullscreen"></iframe><div class="row"><button class="btn g" id="close">Close</button></div>');m.querySelector('.mbox').style.maxWidth='830px';m.querySelector('iframe').src=url;m.querySelector('#close').onclick=()=>{URL.revokeObjectURL(url);m.remove()};
       }catch(err){toast(err.message,1)}finally{e.target.disabled=false}
     };
-    const brandingUrl=fnUrl('document-branding'),feedback=$('#letterheadFeedback');let previewUrl=null;
-    const getBrandSettings=async()=>{try{const {data:{session}}=await sb.auth.getSession();const r=await fetch(brandingUrl+'?settings=1',{headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+session.access_token}});if(!r.ok)throw Error('Could not read letterhead settings');const x=await r.json();$('#letterheadTop').value=x.top_safe_mm;$('#letterheadBottom').value=x.bottom_safe_mm;$('#letterheadRevision').textContent='Stationery revision '+x.revision+(x.letterhead_uploaded?' · Published':' · Upload required');}catch(err){feedback.textContent=err.message}};
-    const refreshLetterheadLibrary=async()=>{
-      const area=$('#letterheadLibrary');if(!area)return;
-      try{const {data:{session}}=await sb.auth.getSession();const r=await fetch(brandingUrl+'?versions=1',{headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+session.access_token}});
-       const j=await r.json();if(!r.ok)throw Error(j.error||'Could not load letterhead library');
-       area.replaceChildren();for(const v of j.versions||[]){const row=document.createElement('div');row.className='row';row.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid #e5e7eb';
-        const name=document.createElement('strong');name.textContent='Letterhead revision '+v.revision+(v.default?' · DEFAULT':'')+(v.retired?' · Archived':'');row.append(name);
-        if(!v.default&&!v.retired){for(const [action,label] of [['set_default','Make default'],['archive','Archive old version']]){
-          const button=document.createElement('button');button.className='btn g s';button.type='button';button.textContent=label;
-          button.onclick=async()=>{if(!confirm(label+' for revision '+v.revision+'? Previously issued PDFs will not change.'))return;button.disabled=true;
-            try{await api('document-branding',{action,version_id:v.id});toast('Letterhead library updated.');await refreshLetterheadLibrary();await getBrandSettings();}
-            catch(e){toast(e.message||'Could not update letterhead',1)}finally{button.disabled=false}};row.append(button)}}area.append(row)}
-        if(!j.versions?.length)area.textContent='Upload the first approved letterhead to begin.';
-      }catch(err){area.textContent=err.message||'Letterhead library unavailable';}
+    // Institutional identity profiles. All writes require an administrator JWT.
+    const brandingUrl=fnUrl('document-branding'),idFeedback=$('#nativeIdentityFeedback');
+    const picker=$('#nativeProfilePicker'),label=$('#nativeProfileLabel');
+    const identityFields={organisation_name:$('#nativeName'),organisation_tagline:$('#nativeTagline'),postal_address:$('#nativeAddress'),phone:$('#nativePhone'),email:$('#nativeEmail'),website:$('#nativeWebsite'),header_alignment:$('#nativeAlign')};
+    let profiles=[],currentId=null,logoPreviewUrl=null;
+    const withAuth=async(options={})=>{
+      const {data:{session},error}=await sb.auth.getSession();
+      if(error||!session)throw Error('Your admin session has expired. Please sign in again.');
+      // Headers must be applied LAST: the old ...options spread discarded Authorization
+      // when Save passed Content-Type, resulting in a 401 and misleading CORS failure.
+      return {...options,method:options.method||'GET',headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+session.access_token,...(options.headers||{})}};
     };
-    getBrandSettings();refreshLetterheadLibrary();
-    $('#saveLetterheadMargins').onclick=async e=>{e.target.disabled=true;try{const x=await api('document-branding',{top_safe_mm:Number($('#letterheadTop').value),bottom_safe_mm:Number($('#letterheadBottom').value)});feedback.textContent='Safe areas updated for future documents';toast('Letterhead safe areas saved.');await getBrandSettings();}catch(err){toast(err.message,1)}finally{e.target.disabled=false}};
-    $('#saveLetterhead').onclick=async e=>{const file=$('#letterheadUpload').files[0];if(!file)return toast('Choose a PNG or JPEG image.',1);if(!['image/png','image/jpeg'].includes(file.type)||file.size>8*1024*1024)return toast('Only PNG/JPEG files up to 8 MB are allowed.',1);e.target.disabled=true;feedback.textContent='Uploading…';try{const session=await sb.auth.getSession(),token=session.data?.session?.access_token;if(!token)throw new Error('Please sign in again');const form=new FormData();form.append('letterhead',file);const response=await fetch(brandingUrl,{method:'POST',headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+token},body:form});const v=await response.json().catch(()=>({}));if(!response.ok)throw new Error(v.error||'Upload failed');feedback.textContent=v.message||'Letterhead published';toast('Letterhead uploaded and published.');await getBrandSettings();await refreshLetterheadLibrary();}catch(err){feedback.textContent=err.message;toast(err.message,1)}finally{e.target.disabled=false}};
-    $('#showLetterhead').onclick=async()=>{try{const session=await sb.auth.getSession();const r=await fetch(brandingUrl,{headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+session.data.session.access_token}});if(!r.ok)throw Error('No published letterhead is available yet.');const blob=await r.blob();if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);const container=$('#letterheadPreview');container.hidden=false;container.innerHTML='<img alt="Current letterhead" style="width:100%;height:auto;border:1px solid #eee">';container.querySelector('img').src=previewUrl;}catch(err){toast(err.message,1)}};
+    const brandFetch=async(url,options={})=>{
+      let r;try{r=await fetch(url,await withAuth(options));}
+      catch(err){throw Error('Cannot reach document-branding. Check deployment, CORS allowlist and network. '+(err.message||''));}
+      if(!r.ok){const x=await r.json().catch(()=>({}));throw Error(x.error||('Identity service returned HTTP '+r.status+'. Check migration 041 and Edge Function JWT settings.'));}
+      return r;
+    };
+    const brandAction=async(action,extras={})=>(await brandFetch(brandingUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,profile_id:currentId,...extras})})).json();
+    const selectedProfile=()=>profiles.find(p=>p.id===currentId);
+    const applyProfile=async(id)=>{
+      currentId=id||null;const p=selectedProfile();
+      if(p){for(const [key,field] of Object.entries(identityFields))field.value=p[key]||'';label.value=p.label||'';}
+      else {for(const [key,field] of Object.entries(identityFields))field.value=key==='header_alignment'?'left':'';label.value='New institutional identity';}
+      $('#nativeIdentityRevision').textContent=p?`${p.is_default?'DEFAULT / PUBLISHED':p.status.toUpperCase()} · Revision ${p.revision}`:'Unsaved new identity';
+      $('#deleteNativeIdentity').disabled=!p||p.is_default;
+      $('#publishNativeIdentity').disabled=!p||p.is_default;
+      $('#uploadNativeLogo').disabled=!p||p.is_default;
+      $('#removeNativeLogo').disabled=!p?.has_logo;
+      picker.value=p?.id||'';
+      const area=$('#nativeLogoPreview');area.replaceChildren();
+      if(logoPreviewUrl){URL.revokeObjectURL(logoPreviewUrl);logoPreviewUrl=null;}
+      if(p?.has_logo){try{
+        const logo=await brandFetch(brandingUrl+'?logo=1&profile_id='+encodeURIComponent(p.id));
+        logoPreviewUrl=URL.createObjectURL(await logo.blob());const img=document.createElement('img');
+        img.alt='Institutional logo for selected identity';img.src=logoPreviewUrl;
+        img.style.cssText='max-width:180px;max-height:90px;object-fit:contain;display:block';area.append(img);
+      }catch(err){area.textContent='Logo preview unavailable: '+err.message;}}
+      else area.textContent='AH monogram is used if no logo is published.';
+    };
+    const refreshIdentity=async(selectId)=>{
+      try{
+        const x=await(await brandFetch(brandingUrl+'?settings=1')).json();profiles=x.profiles||[];
+        const previous=selectId===undefined?currentId:selectId;
+        picker.innerHTML='<option value="">+ New identity</option>'+profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.label)}${p.is_default?' (Default)':''}${p.status==='draft'?' (Draft)':''}</option>`).join('');
+        await applyProfile(profiles.some(p=>p.id===previous)?previous:(profiles.find(p=>p.is_default)?.id||null));
+        idFeedback.textContent='Identity profiles ready. Save a draft and publish it to activate the style.';
+      }catch(err){idFeedback.textContent=err.message;$('#nativeIdentityRevision').textContent='Settings unavailable';}
+    };
+    picker.onchange=()=>applyProfile(picker.value);
+    $('#newNativeIdentity').onclick=()=>applyProfile(null);
+    $('#saveNativeIdentity').onclick=async(e)=>{const btn=e.currentTarget;btn.disabled=true;try{
+      const data=Object.fromEntries(Object.entries(identityFields).map(([key,input])=>[key,input.value.trim()]));
+      const result=await brandAction('save',{...data,label:label.value.trim()});
+      await refreshIdentity(result.profile_id);toast('Identity draft saved. Publish to make it live.');
+    }catch(err){idFeedback.textContent=err.message;toast(err.message,1);}finally{btn.disabled=false;}};
+    $('#publishNativeIdentity').onclick=async(e)=>{if(!currentId)return toast('Save a draft first.',1);
+      if(!confirm('Publish this identity as the default for NEW official PDFs on all portals? Existing archived original PDFs remain intact.'))return;
+      const btn=e.currentTarget;btn.disabled=true;try{await brandAction('publish');await refreshIdentity(currentId);toast('Institutional identity published across all portals.');}
+      catch(err){idFeedback.textContent=err.message;toast(err.message,1);}finally{btn.disabled=false;}};
+    $('#deleteNativeIdentity').onclick=async(e)=>{const p=selectedProfile();if(!p||p.is_default)return toast('Publish a different default before deleting this identity.',1);
+      if(!confirm('Delete this non-default institutional identity? This will not affect issued documents.'))return;
+      const btn=e.currentTarget;btn.disabled=true;try{await brandAction('delete');await refreshIdentity(null);toast('Identity deleted.');}
+      catch(err){toast(err.message,1);}finally{btn.disabled=false;}};
+    $('#uploadNativeLogo').onclick=async(e)=>{const file=$('#nativeLogoUpload').files[0],p=selectedProfile();
+      if(!p||p.is_default)return toast('Save a draft identity before uploading a logo.',1);
+      if(!file)return toast('Choose a compact PNG/JPEG logo.',1);
+      if(!['image/png','image/jpeg'].includes(file.type)||file.size>1048576)return toast('PNG/JPEG up to 1 MB only.',1);
+      const btn=e.currentTarget;btn.disabled=true;try{const data=new FormData();data.append('profile_id',currentId);data.append('logo',file);
+        await brandFetch(brandingUrl,{method:'POST',body:data});$('#nativeLogoUpload').value='';await refreshIdentity(currentId);toast('Draft logo saved. Publish the identity to make it visible.');}
+      catch(err){toast(err.message,1);}finally{btn.disabled=false;}};
+    $('#removeNativeLogo').onclick=async(e)=>{if(!selectedProfile()?.has_logo)return;
+      if(!confirm(selectedProfile().is_default?'Delete the PUBLISHED logo from future PDFs? Archived PDFs remain unchanged.':'Remove logo from selected draft?'))return;
+      const btn=e.currentTarget;btn.disabled=true;try{await brandAction('remove_logo');await refreshIdentity(currentId);toast('Logo removed.');}
+      catch(err){toast(err.message,1);}finally{btn.disabled=false;}};
+    refreshIdentity();
    }
   if(view==='site'&&isAdmin)wireSite(M)}
  async function runBulkApplications(){
@@ -563,7 +732,24 @@ async function start(){
   }catch(err){$('#maintenanceResult').textContent=err.message||'Maintenance refused';toast(err.message,1)}finally{b.disabled=false}
  });
   if(view==='danger'){$('#dq').oninput=e=>{DQ=e.target.value;clearTimeout(wire.t);wire.t=setTimeout(()=>{render(true);const i=$('#dq');i.focus();i.setSelectionRange(99,99)},200)};M.querySelectorAll('[data-del-app]').forEach(b=>b.onclick=()=>delDialog('application',b.dataset.delApp))}
-  if(view==='documents'){M.querySelectorAll('[data-doc-student]').forEach(b=>b.onclick=()=>student360Detail(b.dataset.docStudent,null));const go=()=>openStudent360($('#documentSearch')?.value.trim()||'');$('#documentFind')?.addEventListener('click',go);$('#documentSearch')?.addEventListener('keydown',e=>{if(e.key==='Enter')go()})}
+  if(view==='documents'){
+    const a=$('#docApprovalApplication'),k=$('#docApprovalType'),note=$('#docApprovalNote'),feedback=$('#docEligibilityFeedback');
+    const getEligibility=async()=>{
+      if(!a.value)throw Error('Select a student first.');
+      const res=await sb.rpc('ahct_academic_document_eligibility',{p_application:a.value,p_key:k.value});
+      if(res.error)throw res.error;const v=res.data||{};
+      feedback.textContent=v.eligible?'Eligible based on published grades. Academic review and independent registrar approval are still required.':(v.reason||'Not eligible');
+      return v;
+    };
+    $('#docCheckEligibility').onclick=async()=>{try{await getEligibility()}catch(err){feedback.textContent=err.message||'Eligibility check unavailable'}};
+    $('#docApproveIssuance').onclick=async(e)=>{const b=e.currentTarget;b.disabled=true;try{
+       const eligibility=await getEligibility();if(!eligibility.eligible)throw Error(eligibility.reason||'Record is not eligible');
+       if(note.value.trim().length<10)throw Error('Enter at least 10 characters describing the evidence reviewed');
+       if(!confirm('Record your official academic/registrar decision in the audit trail?'))return;
+       const rr=await sb.rpc('ahct_review_document_issuance',{p_application:a.value,p_key:k.value,p_note:note.value.trim()});
+       if(rr.error)throw rr.error;feedback.textContent='Recorded: '+(rr.data?.stage||'review')+'. A distinct registrar must complete approval before issuance.';toast('Academic document decision recorded.');
+     }catch(err){feedback.textContent=err.message||'Document authorization failed';toast(feedback.textContent,1)}finally{b.disabled=false}};
+    M.querySelectorAll('[data-doc-student]').forEach(b=>b.onclick=()=>student360Detail(b.dataset.docStudent,null));const go=()=>openStudent360($('#documentSearch')?.value.trim()||'');$('#documentFind')?.addEventListener('click',go);$('#documentSearch')?.addEventListener('keydown',e=>{if(e.key==='Enter')go()})}
   wireNew(M)}
  
  function render(keep){const NAVF=navf();if(!NAVF.some(n=>n[0]===view))view=NAVF[0][0];const n=verify().length;

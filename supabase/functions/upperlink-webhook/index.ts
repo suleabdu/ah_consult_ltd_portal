@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
       if (!app || app.status !== "pending_payment") continue;
       const prov = await loadProvider(db, app.pay_provider_id, true); if (!prov) continue;
       const v = await verifyPayment(prov, app);
-      if (v.paid) { await markPaid(db, app, v.amount ?? app.total_ngn, app.pay_gateway_ref ? "UL-" + app.pay_gateway_ref : null, { source: "upperlink-webhook", note: v.note }); await kickSheetSync(); return new Response("ok"); }
+      if (v.paid) { await markPaid(db, app, v.amount ?? app.total_ngn, app.pay_gateway_ref ? "UL-" + app.pay_gateway_ref : null, { source: "upperlink-webhook", note: v.note, provider_evidence: v.evidence || {} }); await kickSheetSync(); return new Response("ok"); }
     }
   } catch (e) { console.error("UPPERLINK WEBHOOK:", e); }
   return new Response("ok");   // always 200 so the provider does not retry forever

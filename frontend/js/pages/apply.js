@@ -18,8 +18,8 @@ window.addEventListener('unhandledrejection',function(e){
 function startApp(){
 const C=window.APPLY_CONFIG,sb=supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY);
 document.querySelectorAll('.lg').forEach(i=>{if(C.LOGO_URL)i.src=C.LOGO_URL;else i.style.display='none'});
-let view,ch=null,poll=null,signOutRunning=false;const $=s=>document.querySelector(s),naira=n=>'₦'+Number(n).toLocaleString();
-function cleanup(){if(poll){clearInterval(poll);poll=null}if(ch){try{sb.removeChannel(ch)}catch(e){console.warn('Could not remove realtime channel:',e)}ch=null}}
+let view,ch=null,poll=null,payPollToken=0,signOutRunning=false;const $=s=>document.querySelector(s),naira=n=>'₦'+Number(n).toLocaleString();
+function cleanup(){payPollToken++;if(poll){clearInterval(poll);poll=null}if(ch){try{sb.removeChannel(ch)}catch(e){console.warn('Could not remove realtime channel:',e)}ch=null}}
 const S={catalog:null,intakeAll:[],photoUrl:null,previewCourses:[],previewCoursesFor:null,previewCoursesError:null,pre:null,w:null,pkgs:[],user:null,profile:null,nav:0,app:null,intakes:[],courses:[],picked:new Set(),intakeId:null,detailsReady:false};
 const STATES=["Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno","Cross River","Delta","Ebonyi","Edo","Ekiti","Enugu","FCT","Gombe","Imo","Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos","Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers","Sokoto","Taraba","Yobe","Zamfara"];
 function step(n){if(S.user)markNav(n-1)}
@@ -327,7 +327,22 @@ function payView(){
  $('#copyReference')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(a.pay_reference||'');toast('Payment reference copied.')}catch(_){toast('Please copy the reference manually.',1)}});
  let checking=false;const check=async()=>{if(checking)return;checking=true;try{const {data,error}=await sb.from('applications').select('*').eq('id',a.id).single();if(error)throw error;if(data){S.app=data;await renderApplicantIdentity();if(data.status==='paid'||data.status==='submitted'||data.status==='under_review'||data.admission_decision==='approved'){cleanup();await finalizeAndShowStatus();return;}const ps=$('#ps');if(ps)ps.textContent='Payment is not confirmed yet. If you have just paid, wait a moment and check again.'}}catch(err){console.warn('Payment status check failed:',err.message);const ps=$('#ps');if(ps)ps.textContent='We could not check right now. Confirm your internet connection and try again.'}finally{checking=false}};
  $('#chk').onclick=async e=>{busy(e.currentTarget,'Checking…');if(a.pay_url){const r=await call('verify-payment',{applicationId:a.id});if(!r.ok)toast(userFacingError(r.error),1);}else{const r=await claimPayment(a.id);if(!r.ok)toast(userFacingError(r.error),1);}await check();if($('#chk'))idle($('#chk'))};$('#backToStatus').onclick=()=>statusView();
- ch=sb.channel('app-'+a.id).on('postgres_changes',{event:'UPDATE',schema:'public',table:'applications',filter:`id=eq.${a.id}`},()=>check()).subscribe();poll=setInterval(check,12000);
+ ch=sb.channel('app-'+a.id).on('postgres_changes',{event:'UPDATE',schema:'public',table:'applications',filter:`id=eq.${a.id}`},()=>check()).subscribe();
+ // Realtime is primary; backoff is a fallback for temporary websocket failures.
+ // Never poll a background tab every 12 seconds across thousands of students.
+ const token=payPollToken;
+ let delay=30000;
+ const schedule=()=>{
+  if(token!==payPollToken)return;
+  poll=setTimeout(async()=>{
+   if(token!==payPollToken)return;
+   if(!document.hidden)await check();
+   if(token!==payPollToken)return;
+   delay=Math.min(120000,Math.round(delay*1.5));
+   schedule();
+  },delay+Math.round(Math.random()*8000));
+ };
+ schedule();
 }
 async function claimPayment(id){let timer;const timeout=new Promise(resolve=>{timer=setTimeout(()=>resolve({error:{message:'timeout'}}),15000)});const result=await Promise.race([sb.rpc('claim_payment',{p_app:id}),timeout]);clearTimeout(timer);if(result.error){console.error('claim_payment failed:',result.error);return {ok:false,error:result.error.message==='timeout'?'This is taking too long. Please check your connection and try again.':(DEBUG?result.error.message:'We could not send your payment notice. Please try again.')}}return {ok:true,application:result.data}}
 
@@ -372,8 +387,8 @@ async function statusView(){
  else if(canPortal)nextAction=`<div class="next-action"><div><strong>You're ready to begin</strong><p>Your admission and onboarding checks are complete.</p></div><button class="primary-link" type="button" data-portal-transition>Enter Student Portal &#8594;</button></div>`;
  else if(a.admission_decision==='rejected')nextAction=`<div class="next-action"><div><strong>Correct your application details</strong><p>Update your personal details and send them for another admissions review. No second payment is required.</p></div><button type="button" id="correctRejected">Edit my details</button></div>`;
  else nextAction=`<div class="next-action"><div><strong>Nothing else is needed right now</strong><p>Check this page again for updates. Your application status will change when the admissions team records a decision.</p></div><span class="status-chip pending">Awaiting update</span></div>`;
- view=$('#content');view.innerHTML=`<div class="application-flow status-flow"><header class="stage-heading status-heading"><p class="eyebrow">YOUR APPLICATION</p><h1>Application status</h1><p>Keep this page as your reference for admission updates and next steps.</p></header><section class="stage-card status-overview"><div class="status-symbol ${statusTone}">${statusTone==='success'?'&#10003;':statusTone==='error'?'!':statusTone==='pending'?'&#8230;':'i'}</div><div class="status-copy"><span class="status-chip ${statusTone}">${esc(applicationStatusText(a))}</span><h2>${esc(b[1])}</h2><p>${esc(b[2])}</p></div></section>${a?`<section class="stage-card status-details"><div class="section-title-row"><div><h2>Application summary</h2><p class="field-help">Your submitted information</p></div>${S.photoUrl?`<img class="status-passport" src="${esc(S.photoUrl)}" alt="Applicant passport photograph">`:''}</div><div class="status-data-grid"><div><span>Applicant</span><strong>${esc(full)}</strong></div><div><span>Application reference</span><strong>${esc(ref)}</strong></div><div><span>Intake</span><strong>${esc(intakeLabel)}</strong></div><div><span>Payment</span><strong>${a.paid_at||a.status==='paid'||['submitted','under_review','approved'].includes(a.status)?'Verified':a.status==='pending_payment'?'Awaiting payment':'Not completed'}</strong></div><div><span>Submitted</span><strong>${a.submitted_at?new Date(a.submitted_at).toLocaleDateString():'—'}</strong></div></div><div class="status-course-list"><div class="section-title-row"><div><h3>Selected courses</h3></div></div>${courseHtml}</div></section>${nextAction}${a?`<section class="stage-card" style="padding:20px 24px"><h3>Admission documents</h3><p class="field-help">Preview, download or print your admission letter and other official academic documents when issued. Payment receipts are available exclusively in the Payment receipts tab.</p><div id="appOfficialDocs" role="region" aria-label="Admission and academic documents" style="margin-top:12px"></div></section>`:''}`:'<section class="stage-card">'+nextAction+'</section>'}<p class="privacy-note">For help, contact <a href="mailto:ahconsultltd02@gmail.com">ahconsultltd02@gmail.com</a>. Never share your password or payment authentication code.</p></div>`;
- if(a&&$('#appOfficialDocs'))AHOfficialDocuments.renderList($('#appOfficialDocs'),sb,C,a.id,{excludeReceipts:true}).catch(()=>{});
+ view=$('#content');view.innerHTML=`<div class="application-flow status-flow"><header class="stage-heading status-heading"><p class="eyebrow">YOUR APPLICATION</p><h1>Application status</h1><p>Keep this page as your reference for admission updates and next steps.</p></header><section class="stage-card status-overview"><div class="status-symbol ${statusTone}">${statusTone==='success'?'&#10003;':statusTone==='error'?'!':statusTone==='pending'?'&#8230;':'i'}</div><div class="status-copy"><span class="status-chip ${statusTone}">${esc(applicationStatusText(a))}</span><h2>${esc(b[1])}</h2><p>${esc(b[2])}</p></div></section>${a?`<section class="stage-card status-details"><div class="section-title-row"><div><h2>Application summary</h2><p class="field-help">Your submitted information</p></div>${S.photoUrl?`<img class="status-passport" src="${esc(S.photoUrl)}" alt="Applicant passport photograph">`:''}</div><div class="status-data-grid"><div><span>Applicant</span><strong>${esc(full)}</strong></div><div><span>Application reference</span><strong>${esc(ref)}</strong></div><div><span>Intake</span><strong>${esc(intakeLabel)}</strong></div><div><span>Payment</span><strong>${a.paid_at||a.status==='paid'||['submitted','under_review','approved'].includes(a.status)?'Verified':a.status==='pending_payment'?'Awaiting payment':'Not completed'}</strong></div><div><span>Submitted</span><strong>${a.submitted_at?new Date(a.submitted_at).toLocaleDateString():'—'}</strong></div></div><div class="status-course-list"><div class="section-title-row"><div><h3>Selected courses</h3></div></div>${courseHtml}</div></section>${nextAction}${a?`<section class="stage-card" style="padding:20px 24px"><h3>Admission documents</h3><p class="field-help">Print issued admission and academic documents here. Payment receipts are available only in the Payment receipts tab.</p><div id="appOfficialDocs" role="region" aria-label="Admission and academic documents" style="margin-top:12px"></div></section>`:''}`:'<section class="stage-card">'+nextAction+'</section>'}<p class="privacy-note">For help, contact <a href="mailto:ahconsultltd02@gmail.com">ahconsultltd02@gmail.com</a>. Never share your password or payment authentication code.</p></div>`;
+ if(a&&$('#appOfficialDocs'))AHOfficialDocuments.renderList($('#appOfficialDocs'),sb,C,a.id,{excludeReceipts:true,actions:['print']}).catch(()=>{});
  if($('#correctRejected'))$('#correctRejected').onclick=editRejectedView;if($('#startNow'))$('#startNow').onclick=()=>pickView();if($('#continueApplication'))$('#continueApplication').onclick=()=>{if(S.app?.status==='pending_payment')payView();else pickView()};
 }
 async function editRejectedView(){
@@ -389,13 +404,14 @@ async function editRejectedView(){
 async function receiptsView(){
  await refreshApp();if(signOutRunning||!S.user)return;
  view=$('#content');markNav(5);const a=S.app;
- view.innerHTML=`<div class="application-flow status-flow receipt-flow"><header class="stage-heading status-heading"><p class="eyebrow">PAYMENT RECORDS</p><h1>Payment receipts</h1><p>Verify a payment and preview, download or print your official receipt. Receipts are issued from verified transactions only.</p></header><section class="stage-card status-overview receipt-overview"><div id="receiptStatusSymbol" class="status-symbol pending" aria-hidden="true">…</div><div class="status-copy"><span id="receiptStatusChip" class="status-chip pending">Checking</span><h2 id="receiptStatusTitle">Checking your payment</h2><p id="receiptStatusDescription">Retrieving verified transaction records and official receipt status.</p></div></section><section class="stage-card status-details receipt-summary"><div class="section-title-row"><div><h2>Payment summary</h2><p class="field-help">Transaction details confirmed by the payment register</p></div></div><div class="status-data-grid" id="receiptSummaryGrid"></div></section><section class="stage-card receipt-verification-card"><div class="section-title-row"><div><h2>Verify your payment</h2><p class="field-help">Refresh the verified transaction and recover any pending receipt. Only verified payments qualify for an official receipt.</p></div></div><div class="receipt-verification-actions"><p id="receiptVerificationStatus" role="status" aria-live="polite">Checking payment records…</p><button type="button" id="receiptPrimaryAction">Verify/Refresh payment</button></div></section><section class="stage-card receipt-register"><div class="section-title-row"><div><h2>Official payment receipts</h2><p class="field-help">Each verified transaction has its own official PDF on the company letterhead. Preview, download or print from this tab only.</p></div></div><div id="receiptList" role="region" aria-live="polite" aria-label="Verified payment receipts"></div></section></div>`;
- const button=$('#receiptPrimaryAction'),notice=$('#receiptVerificationStatus'),list=$('#receiptList');
+ view.innerHTML=`<div class="application-flow status-flow receipt-flow"><header class="stage-heading status-heading"><p class="eyebrow">PAYMENT RECORDS</p><h1>Payment receipts</h1><p>Verify a payment and preview, download or print your official receipt. Receipts are issued from verified transactions only.</p></header><section class="stage-card status-overview receipt-overview"><div id="receiptStatusSymbol" class="status-symbol pending" aria-hidden="true">…</div><div class="status-copy"><span id="receiptStatusChip" class="status-chip pending">Checking</span><h2 id="receiptStatusTitle">Checking your payment</h2><p id="receiptStatusDescription">Retrieving verified transaction records and official receipt status.</p></div></section><section class="stage-card status-details receipt-summary"><div class="section-title-row"><div><h2>Payment summary</h2><p class="field-help">Transaction details confirmed by the payment register</p></div></div><div class="status-data-grid" id="receiptSummaryGrid"></div></section><section class="stage-card receipt-verification-card"><div class="section-title-row"><div><h2>Verify your payment</h2><p class="field-help">Refresh the verified transaction and recover any pending receipt. Only verified payments qualify for an official receipt.</p></div></div><div class="receipt-verification-actions"><p id="receiptVerificationStatus" role="status" aria-live="polite">Checking payment records…</p><button type="button" id="receiptPrimaryAction">Verify/Refresh payment</button></div></section></div>`;
+ const button=$('#receiptPrimaryAction'),notice=$('#receiptVerificationStatus');
  const symbol=$('#receiptStatusSymbol'),chip=$('#receiptStatusChip'),statusTitle=$('#receiptStatusTitle'),statusDescription=$('#receiptStatusDescription'),summary=$('#receiptSummaryGrid');
  const formatDate=value=>{if(!value)return '—';const d=new Date(value);return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});};
  const pair=(label,value)=>`<div><span>${esc(label)}</span><strong>${esc(value===null||value===undefined||value===''?'—':String(value))}</strong></div>`;
  const fullName=[a?.form_data?.firstName,a?.form_data?.otherNames,a?.form_data?.surname].filter(Boolean).join(' ')||S.profile?.full_name||S.user?.email||'Applicant';
  let latestReceipt=null,verifiedPayments=[];
+ const printReceiptLabel=()=> 'Print Receipt';
  const drawState=(tone,label,title,description)=>{
   symbol.className='status-symbol '+tone;symbol.textContent=tone==='success'?'✓':tone==='error'?'!':'…';
   chip.className='status-chip '+tone;chip.textContent=label;statusTitle.textContent=title;statusDescription.textContent=description;
@@ -406,28 +422,30 @@ async function receiptsView(){
    pair('Payment reference',payment?.reference||a?.pay_reference||a?.pay_gateway_ref||'Not assigned')+
    pair('Verified amount',payment?naira(payment.paid_ngn):'Awaiting verified transaction')+
    pair('Payment date',formatDate(payment?.paid_at||payment?.verified_at||a?.paid_at))+
-   pair('Payment provider',payment?.provider||'—')+
+   pair('Payment method',payment?(payment.source?.startsWith('admin_manual')?'Manual bank payment (Finance approved)':'Online payment (provider verified)'):'—')+
+   pair('Payment provider',payment?(payment.source?.startsWith('admin_manual')?'AH Consult Finance':payment.provider||'—'):'—')+
+   (payment?.source&&!payment.source.startsWith('admin_manual')&&payment.provider_transaction_id?pair('Provider transaction ID',payment.provider_transaction_id):'')+
    pair('Verification status',payment?'Verified':'Not confirmed from transaction register')+
    pair('Receipt status',latestReceipt?(latestReceipt.status==='available'&&latestReceipt.metadata?.pdf_path?'Issued and archived':'Awaiting PDF issuance'):'Not issued')+
    (latestReceipt?pair('Official receipt ID',latestReceipt.id):'');
  };
- if(!a){button.disabled=true;drawState('pending','No application','Application required','Complete your application before verifying a payment.');notice.textContent='No application is available for this account.';list.textContent='No official receipts available.';drawSummary();return;}
+ if(!a){button.disabled=true;drawState('pending','No application','Application required','Complete your application before verifying a payment.');notice.textContent='No application is available for this account.';drawSummary();return;}
  const refreshReceipts=async()=>{
   const {data:payments,error:payError}=await sb.from('payments')
-   .select('id,reference,expected_ngn,paid_ngn,paid_at,verified_at,provider')
+   .select('id,reference,expected_ngn,paid_ngn,paid_at,verified_at,provider,source,provider_transaction_id')
    .eq('application_id',a.id).not('verified_at','is',null).order('verified_at',{ascending:false});
   // A payment is verified from the ledger, not from an admission decision.
   if(payError)console.warn('Verified payment summary unavailable:',payError.message);
   verifiedPayments=(payments||[]).filter(p=>Number(p.expected_ngn)>0&&Number(p.paid_ngn)>=Number(p.expected_ngn));
-  const docs=await AHOfficialDocuments.renderList(list,sb,C,a.id,{receiptsOnly:true,payments:verifiedPayments});
+  const docs=await AHOfficialDocuments.fetchRecords(sb,a.id,{receiptsOnly:true,skipRepair:true});
   latestReceipt=(docs||[]).find(d=>d.document_type==='payment_receipt'&&d.status==='available'&&d.metadata?.pdf_path&&d.metadata?.sha256)
    ||(docs||[]).find(d=>d.document_type==='payment_receipt'&&['pending','available'].includes(d.status))||null;
   const ready=!!(latestReceipt&&latestReceipt.status==='available'&&latestReceipt.metadata?.pdf_path&&latestReceipt.metadata?.sha256);
-  button.textContent=ready?'Print Receipt':'Verify/Refresh payment';
-  if(ready){drawState('success','Receipt issued','Your payment receipt is ready','An official PDF has been archived for your verified payment. Preview, download or print it below.');notice.textContent='Payment verified. Your official receipt is ready.';}
+  button.textContent=ready?printReceiptLabel():'Verify/Refresh payment';
+  if(ready){AHOfficialDocuments.warmOnIntent(button,sb,C,latestReceipt);drawState('success','Receipt issued','Your payment receipt is ready','An official PDF has been archived for your verified payment. Preview, download or print it below.');notice.textContent='Payment verified. Your official receipt is ready.';}
   else if(verifiedPayments.length||latestReceipt){drawState('pending','Payment verified','Your payment is confirmed','The verified transaction is recorded. Its official PDF has not yet been archived. Select Verify/Refresh payment to retry issuance.');notice.textContent='Payment verified. Receipt issuance is pending. Select Verify/Refresh payment to retry.';}
   else if(payError){drawState('pending','Unable to check','Payment register unavailable','Payment data could not be retrieved. Select Verify/Refresh payment again.');notice.textContent='The verified payment register is temporarily unavailable.';}
-  else{drawState('pending','Awaiting verification','No verified transaction recorded','After your payment provider confirms the full payment, your official receipt will appear here.');notice.textContent='No verified payment found. Select Verify/Refresh payment to check your transaction.';}
+  else{drawState('pending','Awaiting verification','No verified transaction recorded','After your online provider verifies payment or Finance approves a manual bank payment, your official receipt will appear here.');notice.textContent='No verified payment found. Select Verify/Refresh payment to check your transaction.';}
   drawSummary();return {ready};
  };
  button.onclick=async()=>{
@@ -446,23 +464,14 @@ async function receiptsView(){
     else notice.textContent=result.note||'Payment not yet verified. Confirm your transaction with the provider.';
    }
   }catch(e){notice.textContent=e.message||'Payment verification failed. Please try again.';toast(notice.textContent,1);}
-  finally{button.disabled=false;button.textContent=latestReceipt?.status==='available'&&latestReceipt.metadata?.pdf_path&&latestReceipt.metadata?.sha256?'Print Receipt':'Verify/Refresh payment';}
+  finally{button.disabled=false;button.textContent=latestReceipt?.status==='available'&&latestReceipt.metadata?.pdf_path&&latestReceipt.metadata?.sha256?printReceiptLabel():'Verify/Refresh payment';}
  };
  try{
-  const first=await refreshReceipts();
-  if(!first.ready&&verifiedPayments.length){
-   // One guarded automatic retry on tab entry. Never loop or fabricate a receipt.
-   notice.textContent='Verified transaction found. Preparing your official receipt…';
-   button.disabled=true;
-   try{
-    const {data:{session}}=await sb.auth.getSession();
-    if(session){
-     const response=await fetch(C.SUPABASE_URL.replace(/\/$/,'')+'/functions/v1/verify-payment',{method:'POST',headers:{Authorization:'Bearer '+session.access_token,apikey:C.SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:JSON.stringify({applicationId:a.id})});
-     if(response.ok){const result=await response.json();const fresh=await refreshReceipts();if(!fresh.ready&&result.note)notice.textContent=result.note;}
-    }
-   }catch(e){console.warn('Automatic receipt recovery:',e.message||e);}finally{button.disabled=false;}
-  }
- }catch(e){list.textContent='Could not retrieve official receipts. Please retry.';drawState('error','Action required','Receipt service unavailable','The document register could not be loaded. Please refresh or contact Finance with your payment reference.');notice.textContent=e.message||'Receipt recovery failed. Please contact Finance.';drawSummary();}
+  await refreshReceipts();
+  // Passive page entry reads the ledger only. An explicit Verify/Refresh click
+  // performs any remote verification or recovery; no automatic provider calls.
+
+ }catch(e){drawState('error','Action required','Receipt service unavailable','The document register could not be loaded. Please refresh or contact Finance with your payment reference.');notice.textContent=e.message||'Receipt recovery failed. Please contact Finance.';drawSummary();}
 }
 async function defermentView(){await refreshApp();if(signOutRunning||!S.user)return;if(!S.app||S.app.admission_decision!=='approved'){view.innerHTML='<h2>Defer a course</h2><div class="notice i">Deferment is available after admission. Please return here once you have been admitted.</div>';return}const opt=await sb.rpc('student_deferment_options',{p_application:S.app.id});if(opt.error){note(opt.error.message);return}const options=opt.data||{},courses=options.courses||[],ints=options.intakes||[];let D={deferments:[]};try{const pd=await sb.rpc('portal_data');if(!pd.error&&pd.data)D=pd.data}catch(_){}view.innerHTML=`<h2>Request deferment</h2><p class="sub">You can request to postpone one or more active courses. You may cancel a pending request at any time before it is approved.</p><div class="panel"><label>Deferment scope</label><select id="dscope"><option value="courses">Selected courses</option><option value="intake">Whole current intake</option></select><div id="dcourses">${courses.map(c=>`<label class="course"><input type="checkbox" value="${c.code}">${esc(c.name)} <small>(${esc(c.category)})</small></label>`).join('')}</div><label>Reason</label><select id="dtype"><option value="financial">Financial</option><option value="health">Health</option><option value="work">Work</option><option value="relocation">Relocation</option><option value="family">Family</option><option value="academic">Academic</option><option value="other">Other</option></select><label>Explain your reason</label><textarea id="dre" rows="4" placeholder="Please explain why you need to defer..."></textarea><label>Preferred return intake (optional)</label><select id="dreturn"><option value="">No preference</option>${ints.map(i=>`<option value="${i.id}">${esc(i.label)}</option>`).join('')}</select><button id="sendDef">Send deferment request</button></div><h3 style="margin-top:22px">My requests</h3>${(D.deferments||[]).length?D.deferments.map(d=>`<div class="item"><b>${esc((d.course_names||[]).join(', ')||'Whole intake')}</b><p>${esc(d.reason)}</p><span class="pill ${d.status==='approved'?'ok':d.status==='rejected'?'bad':d.status==='cancelled'?'none':'wait'}">${esc(d.status)}</span>${d.status==='pending'?`<button class="btn2" data-cdef="${d.id}">Cancel request</button>`:''}</div>`).join(''):'<p class="sub">No deferment requests yet.</p>'}`;$('#sendDef').onclick=async e=>{const scope=$('#dscope').value,codes=[...document.querySelectorAll('#dcourses input:checked')].map(x=>x.value),reason=$('#dre').value.trim();if(scope==='courses'&&!codes.length)return toast('Select at least one course.',1);if(reason.length<15)return toast('Please explain your reason in at least 15 characters.',1);e.target.disabled=true;const r=await sb.rpc('request_deferment',{p_application:S.app.id,p_scope:scope,p_courses:codes,p_reason_type:$('#dtype').value,p_reason:reason,p_return:$('#dreturn').value||null});e.target.disabled=false;if(r.error)return toast(r.error.message,1);toast('Deferment request sent.');await refreshApp();statusView();};document.querySelectorAll('[data-cdef]').forEach(b=>b.onclick=async()=>{const r=await sb.rpc('cancel_deferment',{p_id:b.dataset.cdef});if(r.error)return toast(r.error.message,1);toast('Deferment request cancelled.');defermentView();});}
 async function profileView(){

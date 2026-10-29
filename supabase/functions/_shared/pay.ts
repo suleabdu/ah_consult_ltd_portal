@@ -89,7 +89,7 @@ export async function createPayment(p: Provider, c: { ref: string; amount: numbe
   return { bank: "Online payment (Upperlink)", account: "", url: String(url), gatewayRef: pick(j, "data.reference", "data.transactionReference", "data.transactionRef", "reference") };
 }
 
-export async function verifyPayment(p: Provider, app: { pay_reference: string; pay_gateway_ref?: string | null; total_ngn: number }): Promise<{ paid: boolean; amount: number | null; note: string }> {
+export async function verifyPayment(p: Provider, app: { pay_reference: string; pay_gateway_ref?: string | null; total_ngn: number }): Promise<{ paid: boolean; amount: number | null; note: string; evidence?: Record<string,string> }> {
   if (p.kind !== "upperlink") return { paid: false, amount: null, note: "This method is confirmed by bank transfer or webhook." };
   const tpl = s(p.config.verify_url); assertPublicHttps(tpl.replace(/\{[a-z_]+\}/gi, "x"), "Upperlink verify URL");
   const ref = app.pay_gateway_ref || app.pay_reference, url = tpl.replace("{reference}", encodeURIComponent(ref)).replace("{merchantId}", encodeURIComponent(s(p.config.merchant_id)));
@@ -101,7 +101,15 @@ export async function verifyPayment(p: Provider, app: { pay_reference: string; p
   const amount = Number(pick(j, "data.amount", "data.amountPaid", "data.paidAmount", "amount")); const amt = Number.isFinite(amount) ? amount : null;
   // Strict: whole-word status AND the provider must report an amount that covers the total (no tolerance, no null pass-through).
   const paid = isPaidStatus(status) && amountCovers(amt, app.total_ngn);
-  return { paid, amount: amt, note: redact(status, p).slice(0, 80) };
+  // Persist a strict allowlist of verified provider details, never raw card/token data.
+  const field=(...paths:string[]) => String(pick(j,...paths)??'').slice(0,120);
+  const evidence=paid?{
+    transaction_reference:field('data.transactionReference','data.transactionId','data.paymentReference','data.reference'),
+    channel:field('data.paymentChannel','data.paymentMethod','data.channel','data.paymentType'),
+    payment_date:field('data.paidAt','data.paymentDate','data.transactionDate'),
+    currency:field('data.currency','data.currencyCode')
+  }:undefined;
+  return { paid, amount: amt, note: redact(status, p).slice(0, 80), evidence };
 }
 
 export async function markPaid(db: any, app: any, paidNgn: number, ref: string | null, raw: unknown) {
