@@ -18,7 +18,7 @@
     "@supabase/supabase-js": "^2.118.0",
     "esbuild": "^0.28.2",
     "eslint": "^10.14.0",
-    "globals": "^15.14.0",
+    "globals": "^17.13.0",
     "jsdom": "^25.0.1",
     "read-excel-file": "5.8.5"
   }
