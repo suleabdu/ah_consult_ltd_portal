@@ -1,3 +1,5 @@
+> **Later update:** This package includes the V18.6.2 Document Designer upgrade. For changes since V18.6.1 and correct rollout order, see [V18.6.2 release notes](../releases/RELEASE_V18_6_2.md) and [Document Template Management](../DOCUMENT_TEMPLATE_MANAGEMENT.md). The report below is retained as the original V18.6.1 upgrade record.
+
 # AHCT V18.6.1 — Upgrade implementation report
 **Prepared:** 28 October 2026 · **Scope:** Uploaded V18.6 source package; no live deployment.
 
@@ -14,7 +16,7 @@
 
 - Static release gate: **37 passed / 0 failed** after patches (see execution record).
 - Client JavaScript body parity: **11 / 11 exact matches**.
-- Static Chromium CSS/HTML visual parity: **0.0000% pixel differences** on four representative pages across three viewport widths (see [visual parity evidence](docs/STATIC_VISUAL_PARITY.md)).
+- Static Chromium CSS/HTML visual parity: **0.0000% pixel differences** on four representative pages across three viewport widths (see [visual parity evidence](../STATIC_VISUAL_PARITY.md)).
 - Node-based regression checks not requiring npm packages: passport compression, course preselection, critical regressions, V18 product design, V18.1, V18.2, V18.3, V18.5, V18.6 and asset extraction — passed.
 
 ## Still required before calling the release production-ready
@@ -31,4 +33,4 @@
 - The `student-login` redirect and legacy document rewrite rules remain in place because there is no evidence of zero historical traffic; deleting deep links prematurely would break bookmarks.
 - The original Git repository was not modified, tagged or pushed; the clean delivery intentionally excludes Git history. Set up branch protection and tag only after release gates and explicit approval.
 
-**Result:** A source-remediated V18.6.1 candidate, **not** a verified production deployment. Refer to [deployment/release steps](docs/RELEASE_V18_6_1.md) before cutover.
+**Result:** A source-remediated V18.6.1 candidate, **not** a verified production deployment. Refer to [deployment/release steps](../releases/RELEASE_V18_6_1.md) before cutover.

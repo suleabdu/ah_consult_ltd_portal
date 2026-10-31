@@ -1,50 +1,73 @@
-# AHCT Student Hub — secure training, admissions and academic operations
+# AH Consult Ltd — Professional Services and Student Hub
 
-**V18.6.1 source remediation · 28 October 2026 · client work, not an authorized public demo**
+**Current source version:** V18.8.1  
+**Review posture:** source-review candidate; not production-certified or presented as an authorized public demonstration.
 
-AH Consult manages admission requests, secure student accounts, payments, academic records, tutor activities and verified institutional documents through one portal. Applicants need a clear journey from choosing training to payment and receipt retrieval; staff need audited, role-appropriate workflows that are reliable on desktop and mobile.
+AH Consult Ltd combines a professional-services website with a distinct Student Hub for training, applications, learner access and staff workflows. The repository contains the static frontend, Supabase database migrations and Edge Functions, operational guidance, and automated quality checks that support those journeys.
 
-## Who uses it?
+## What this repository contains
 
-**Applicants** register and track an admission/payment. **Students** access their academic workspace and verified documents. **Tutors** manage learning workflows. **Administration and finance** review, reconcile and issue institutional records. Google Sheets serves as a **read-only reporting mirror**, never the source of authority.
+- A corporate public website for architecture, construction, interior design and consultancy.
+- A separate public Student Hub for course discovery, training applications, student access and staff access.
+- A governed Supabase platform for admissions, payments, academic records, student documents, role-based administration and a read-only Google Sheets reporting mirror.
+- Seventeen Supabase Edge Functions and forty-three ordered database migrations.
+- Unit, browser, SQL, security-posture and load-test starter coverage, with CI checks for secrets, static quality, Deno functions, SQL migrations and vendored assets.
 
-## Architecture
+## Repository guide
+
+| Location | Purpose |
+| --- | --- |
+| `frontend/` | Public pages, styles, browser scripts and deploy configuration. |
+| `supabase/` | Ordered SQL migrations, Edge Functions and safe configuration examples. |
+| `tests/` | Unit, browser, SQL and load-test starter checks. |
+| `scripts/` | Local validation, deployment helpers and configuration generation. |
+| `docs/` | Architecture, operations, policy, review, release and archival material. |
+| `sheets/` | Read-only reporting-mirror Apps Script. |
+
+Start with the [documentation guide](docs/README.md), then use the [panel review guide](docs/PANEL_REVIEW.md) for a focused evidence route.
+
+## System overview
 
 ```mermaid
 flowchart LR
     User[Applicant / Student / Tutor / Staff] -->|HTTPS| UI[Static Vercel frontend]
     UI -->|Supabase Auth JWT| DB[(Supabase Postgres + RLS)]
     UI -->|Authenticated requests| Edge[Deno Edge Functions]
-    Edge -->|Server-side price + verified status| DB
+    Edge -->|Server-side price and verified status| DB
     Edge -->|Provider callbacks / verification| Pay[Approved payment provider]
-    DB -->|Transactional outbox| Worker[Sheet / communication workers]
+    DB -->|Transactional outbox| Worker[Sheet and communication workers]
     Worker -->|Read-only projection| Sheet[Google Sheet]
     DB -->|Issue + SHA-256| Docs[Private PDF archive / public verifier]
 ```
 
-**Current repository:** `frontend/` has 12 application HTML pages plus 2 draft legal information pages, CSS and self-hosted libraries. `supabase/migrations/` contains **34 unchanged ordered migrations (001–034)**; `supabase/functions/` has **16 Edge Functions** and `_shared/` helpers. `tests/` includes unit/DOM, SQL and browser smoke tests. CI checks page structure, lint, unit tests, Deno, SQL, vendored assets and secret leakage.
+The architecture, decision records and trust boundaries are described in [Architecture](docs/ARCHITECTURE.md). Operational deployment and recovery guidance is in the [runbook](docs/RUNBOOK.md).
 
-## Security characteristics
+## Current release and review materials
 
-Database RLS, backend-set prices, payment provider verification, an append-only audit log, SHA-256 receipt validation, no spreadsheet write authority, self-hosted scripts and a CSP that forbids inline JavaScript. **Open items:** mandatory staff TOTP, production CAPTCHA/email confirmation and source/history credentials rotation. Do not claim the system is penetration-tested or internationally certified. [See security response](docs/SECURITY_INCIDENT_RESPONSE.md).
+The current source release separates the corporate website from the Student Hub while retaining all governed student and staff workflows. Read the [V18.8.1 deployment guide](docs/releases/DEPLOY_V18_8_1.md) before staging or deployment. Earlier release guides are indexed in [Release history](docs/releases/README.md).
 
-## Local checks
+The illustrative six-page document preview uses synthetic records and visible sample markings; it is not a production-issued document. See [the sample preview](docs/samples/AHCT_Native_Document_Illustrative_Preview.pdf) and the accompanying [sample notes](docs/samples/README.md).
+
+## Security and external-review boundary
+
+The checked-in public browser configuration is deliberately inert. Deployment generates `frontend/js/config.js` from public environment variables using `npm run configure:frontend`; service-role, payment-provider and Google credentials must never be placed in the browser or committed to source.
+
+Do not treat this source package as evidence of production authorization, penetration testing, international accreditation or completed operational controls. The repository’s security incident response and remaining owner actions are documented in [Security incident response](docs/SECURITY_INCIDENT_RESPONSE.md) and [SECURITY.md](SECURITY.md). Any external distribution should exclude `.git/`, local Supabase state and populated environment files.
+
+## Local validation
+
+Install locked Node dependencies, then run the cross-platform static and unit checks:
 
 ```bash
 npm ci
 npm run check
-# Requires an isolated PostgreSQL test database
-DATABASE_URL='postgres:///your_disposable_test_database' ./scripts/test-sql.sh
-# Requires Deno
-for d in supabase/functions/*/; do [ "$(basename "$d")" = _shared ] || deno check "${d}index.ts"; done
 ```
 
-The committed public configuration is intentionally inert. Supply `AHCT_SUPABASE_URL` and `AHCT_SUPABASE_ANON_KEY` to `npm run configure:frontend` at build time, and use separate `AHCT_STAGING_URL` and `AHCT_STAGING_ANON_KEY` for local synthetic tests. Deploy the `frontend/` directory to Vercel and Supabase migrations and functions using the instructions in [installation notes](docs/INSTALLATION_NOTES.md). Do not use production keys or real students to test.
+The validation command discovers a suitable Python 3 launcher on Windows, macOS and Linux. Full release validation also requires:
 
-## Demo / visuals
+- An isolated PostgreSQL database for `scripts/test-sql.sh`.
+- Deno for Edge Function type checks and unit tests.
+- A staging project with synthetic data for browser, payment-provider and access-control verification.
 
-The original student and staff page layouts, route names and brand tokens (orange `#ea580c`, ink `#171717`) are intentionally retained. Before publication: capture and approve desktop/tablet/mobile screenshots using the existing browser smoke test (`tests/browser/homepage.browser.mjs`), use a **separate synthetic-data project**, and obtain AH Consult's **written permission** to publish this client case study. No production environment URL or demo credentials are bundled.
+Review the exact deployment prerequisites in [Installation notes](docs/INSTALLATION_NOTES.md) and the current release guide before making any production change.
 
-## Documentation
-
-[Architecture and decisions](docs/ARCHITECTURE.md) · [Operations runbook](docs/RUNBOOK.md) · [Release gate](docs/RELEASE_V18_6_1.md) · [Security](SECURITY.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md)

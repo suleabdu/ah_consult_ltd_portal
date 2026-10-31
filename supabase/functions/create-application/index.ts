@@ -28,13 +28,14 @@ Deno.serve(safe(async (req) => {
   const now = Date.now();
   if (!intake?.is_active || (intake.opens_at && now < +new Date(intake.opens_at)) || (intake.closes_at && now > +new Date(intake.closes_at))) return json({ error: "This intake is closed." }, 400);
   const uniqueCodes = [...new Set(courseCodes.map((x: any) => String(x).trim()).filter(Boolean))];
-  const { data: courses } = await db.from("courses").select("*").in("code", uniqueCodes).eq("is_active", true);
+  const { data: courses } = await db.from("courses").select("*").in("code", uniqueCodes).eq("is_active", true).eq("workflow_status", "published");
   if (!courses || courses.length !== uniqueCodes.length) return json({ error: "A selected course is unavailable." }, 400);
 
   let total = courses.reduce((s: number, c: any) => s + Number(c.fee_ngn || 0), 0), pkg: any = null;
   if (packageCode) {
     const { data: p } = await db.from("packages").select("*").eq("code", packageCode).eq("is_active", true).maybeSingle();
     if (!p) return json({ error: "This package is unavailable." }, 400);
+    if (courses.some((c: any) => !c.in_full_package)) return json({ error: "One of the selected courses has not been approved for the Full Package." }, 400);
     if (p.max_courses && uniqueCodes.length > p.max_courses) return json({ error: `The package allows up to ${p.max_courses} courses.` }, 400);
     if (new Set(courses.map((c: any) => c.category)).size !== courses.length) return json({ error: "With the Full Package you can choose only one course from each level." }, 400);
     pkg = p; total = p.fee_ngn;

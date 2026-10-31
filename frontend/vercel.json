@@ -4,6 +4,42 @@
   "trailingSlash": false,
   "rewrites": [
     {
+      "source": "/student-hub",
+      "destination": "/student-hub.html"
+    },
+    {
+      "source": "/services/architecture",
+      "destination": "/services-architecture.html"
+    },
+    {
+      "source": "/services/construction",
+      "destination": "/services-construction.html"
+    },
+    {
+      "source": "/services/interior-design",
+      "destination": "/services-interior.html"
+    },
+    {
+      "source": "/services/consultancy",
+      "destination": "/services-consultancy.html"
+    },
+    {
+      "source": "/services-consultancy",
+      "destination": "/services-consultancy.html"
+    },
+    {
+      "source": "/services-interior",
+      "destination": "/services-interior.html"
+    },
+    {
+      "source": "/services-construction",
+      "destination": "/services-construction.html"
+    },
+    {
+      "source": "/services-architecture",
+      "destination": "/services-architecture.html"
+    },
+    {
       "source": "/apply",
       "destination": "/apply.html"
     },

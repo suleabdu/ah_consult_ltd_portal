@@ -13,12 +13,15 @@ function validPublic(label,url,key){
   if (data.role !== 'anon') throw Error(`${label}: only the public anon key is permitted, never a privileged key`);
   return {url,key};
 }
-const pub=validPublic('Production / deploy',process.env.AHCT_SUPABASE_URL,process.env.AHCT_SUPABASE_ANON_KEY);
-const stage=(process.env.AHCT_STAGING_URL || process.env.AHCT_STAGING_ANON_KEY)
+const deployConfigured=Boolean(process.env.AHCT_SUPABASE_URL || process.env.AHCT_SUPABASE_ANON_KEY);
+const pub=deployConfigured ? validPublic('Production / deploy',process.env.AHCT_SUPABASE_URL,process.env.AHCT_SUPABASE_ANON_KEY) : null;
+const stagingConfigured=Boolean(process.env.AHCT_STAGING_URL || process.env.AHCT_STAGING_ANON_KEY);
+const stage=stagingConfigured
   ? validPublic('Local staging',process.env.AHCT_STAGING_URL,process.env.AHCT_STAGING_ANON_KEY) : null;
+if(!pub&&!stage) throw Error('Provide deploy credentials, local staging credentials, or both.');
 const quoted=(v)=>JSON.stringify(v);
-let out=src.replace("SUPABASE_URL: 'https://unconfigured.invalid'",'SUPABASE_URL: '+quoted(pub.url))
-  .replace("SUPABASE_ANON_KEY: 'PUBLIC_ANON_KEY_NOT_CONFIGURED'",'SUPABASE_ANON_KEY: '+quoted(pub.key))
+let out=src.replace("SUPABASE_URL: 'https://unconfigured.invalid'",pub?'SUPABASE_URL: '+quoted(pub.url):"SUPABASE_URL: 'https://unconfigured.invalid'")
+  .replace("SUPABASE_ANON_KEY: 'PUBLIC_ANON_KEY_NOT_CONFIGURED'",pub?'SUPABASE_ANON_KEY: '+quoted(pub.key):"SUPABASE_ANON_KEY: 'PUBLIC_ANON_KEY_NOT_CONFIGURED'")
   .replace('const LOCAL = null;',stage ? 'const LOCAL = { SUPABASE_URL: '+quoted(stage.url)+', SUPABASE_ANON_KEY: '+quoted(stage.key)+' };' : 'const LOCAL = null;');
 if(out===src)throw Error('Template replacement failed');
 writeFileSync(resolve(root,'frontend/js/config.js'),out);

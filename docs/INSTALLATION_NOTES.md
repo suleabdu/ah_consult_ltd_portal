@@ -12,4 +12,4 @@ AHCT_SUPABASE_URL=https://your-project.supabase.co AHCT_SUPABASE_ANON_KEY=<publi
 
 Use these same environment variables as deployment build variables (Vercel output directory: `frontend`; build command: `npm run configure:frontend` from repository root). For local previews, supply a **separate synthetic-data staging** project via `AHCT_STAGING_URL` and `AHCT_STAGING_ANON_KEY`. A local page without staging variables stays offline. The generator rejects service-role JWTs. Generated configuration is public by design but should not be committed back to the source repository.
 
-Run `npm ci && npm run check` locally. SQL migration tests require a PostgreSQL test database; type-checking functions requires Deno. See [the release checklist](RELEASE_V18_6_1.md) for exact checks.
+Run `npm ci && npm run check` locally. SQL migration tests require a PostgreSQL test database; type-checking functions requires Deno. See [the release checklist](releases/RELEASE_V18_6_1.md) for exact checks.

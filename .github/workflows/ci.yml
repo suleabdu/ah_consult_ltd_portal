@@ -24,7 +24,9 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - run: python3 scripts/validate.py
+      - name: Production dependency audit
+        run: npm run audit:production
+      - run: npm run validate
       - name: Undefined-name lint (catches calls to functions that were never defined)
         run: npm run lint:pages
       - name: Frontend unit tests

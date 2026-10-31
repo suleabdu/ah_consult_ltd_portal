@@ -4,7 +4,7 @@
 
 ## Before launch (blocking)
 
-1. Rotate the exposed Google service-account key and verify Google Sheets read-only sync against the actual project. See [security incident response](SECURITY_INCIDENT_RESPONSE.md).
+1. Rotate the exposed Google service-account key and verify Google Sheets read-only sync against the actual project. See [security incident response](../SECURITY_INCIDENT_RESPONSE.md).
 2. Inspect original Git history (`gitleaks git --redact .`) and previous releases. Review service-role, Google OAuth, payment and encryption credentials for exposure; rotate where indicated.
 3. Create a fresh, **separate** Supabase staging project. Configure `AHCT_STAGING_URL` and `AHCT_STAGING_ANON_KEY` and generate the public deployment `config.js` at build time. Load only synthetic records. Do not point public demonstrations at production or use real applicants. Obtain the client's written approval before publication.
 4. Install dependencies with `npm ci`; run `npm run check`; run Deno checks and tests; run PostgreSQL/Supabase integration tests. The local environment used to prepare this ZIP did not have a working npm registry, Postgres or Deno, so these stages need separate verification.
@@ -24,8 +24,8 @@
 
 ## Deliberately not certified / postponed
 
-- Production key revocation, full historical gitleaks scan, network-dependent npm tests, Deno checks, real Supabase SQL integration, full authenticated Playwright baseline approvals and live payment tests (a limited static 4-page/3-breakpoint Chromium comparison passed; see [static visual evidence](STATIC_VISUAL_PARITY.md)).
-- Mandatory staff MFA, new payment gateways, true multi-currency accounting, verified privacy-data exports and enforceable retention/deletion automation. These need additional architecture/database decisions and live integration testing; see [roadmap](ROADMAP.md).
+- Production key revocation, full historical gitleaks scan, network-dependent npm tests, Deno checks, real Supabase SQL integration, full authenticated Playwright baseline approvals and live payment tests (a limited static 4-page/3-breakpoint Chromium comparison passed; see [static visual evidence](../STATIC_VISUAL_PARITY.md)).
+- Mandatory staff MFA, new payment gateways, true multi-currency accounting, verified privacy-data exports and enforceable retention/deletion automation. These need additional architecture/database decisions and live integration testing; see [roadmap](../ROADMAP.md).
 
 ## Rollback
 

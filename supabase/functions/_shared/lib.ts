@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 // Default CORS (used by webhook-style functions that are never called from a browser page).
 export const cors = { "Access-Control-Allow-Headers": "authorization, content-type, x-client-info, apikey" };   // origin is added per-request by safe()/corsHeaders()
 export const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });

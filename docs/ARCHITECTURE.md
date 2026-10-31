@@ -11,7 +11,7 @@ Browser (Vercel, static)  --anon key + user JWT-->  Supabase Postgres (RLS)   <-
         +-- sheet-sync / communication-worker: pull jobs from outbox tables
 ```
 
-## Edge Functions (16)
+## Edge Functions (17)
 | Function | JWT | Purpose |
 |---|---|---|
 | create-application | yes | Creates/updates an application, locks prices from the database, opens a payment attempt (idempotent). |
@@ -20,12 +20,13 @@ Browser (Vercel, static)  --anon key + user JWT-->  Supabase Postgres (RLS)   <-
 | payment-webhook | no | Monnify callback; verified by HMAC signature (constant-time) and exact amount. |
 | upperlink-webhook | no | Only a trigger: re-verifies with the provider before marking anything paid; rate-limited. |
 | admin-register | no | Staff sign-up with an access code; rate-limited; account stays pending until an admin approves. |
+| admin-bulk-import | yes (administrator or registrar) | Validates and atomically imports paper applications from the managed template. |
 | admin-delete, admin-settings, admin-sync | yes (admin) | Administration, encrypted provider settings, manual mirror refresh. |
 | sheet-sync | service | Drains `sheet_outbox` into the read-only Google Sheet. |
 | communication-worker | service | Outbound communication processing. |
 | document-issue | yes (admin, finance or service role) | Recovery/retry worker that archives verified per-payment receipts. |
 | student-document | yes (owner or service role) | Canonical PDF renderer and private archive, including watermarked admin previews. |
-| document-branding | yes (admin) | Publish private letterhead assets and safe-area settings. |
+| document-branding | yes (admin) | Manages institutional identity and the approved document-rendering configuration. |
 | document-verify | no (public verification) | Public hash-based document verification; no PII exposure. |
 
 Shared code lives in `_shared/`: `lib.ts` (CORS, auth, safe wrapper), `guards.ts` (pure, unit-tested security helpers), `crypto.ts`, `pay.ts`, `documents.ts`, `sync.ts`.
@@ -36,6 +37,8 @@ Shared code lives in `_shared/`: `lib.ts` (CORS, auth, safe wrapper), `guards.ts
 - `audit_log` is append-only (immutable trigger). Every administrative action writes to it.
 - Outbox pattern: database triggers insert rows into `sheet_outbox` and communication queues; workers claim, process, retry with back-off, and mark failures (`fail_sheet_job`).
 - Scheduled jobs: `expire-unpaid` (hourly) and `expire-drafts` (daily) via pg_cron. Worker invocation schedules are created by you; see docs/STEP_BY_STEP_SETUP_GUIDE.md.
+- Public configuration is least-privilege: anonymous browsers can read only approved branding, theme, image, location and legacy gallery settings. Operational settings remain administrator/server-side only.
+- Media uses two safety zones: existing `site-assets` serves reviewed public assets, while `media-drafts` is a private, identity-scoped staging bucket. Do not use drafts on public pages; move only reviewed derivatives through an authorised server-side promotion flow.
 
 ## Decisions
 - **Mirror, not control plane.** Spreadsheet access is broad and weakly attributable, so it can read but never write authority.
@@ -45,7 +48,7 @@ Shared code lives in `_shared/`: `lib.ts` (CORS, auth, safe wrapper), `guards.ts
 
 ## V18.5 receipt architecture
 
-The `033` migration queues a pending canonical receipt per **verified payment ID**. Payment verification schedules the internal receipt worker, which uses `student-document` to archive a single private PDF and its SHA-256 fingerprint before reporting it issued. Students and administrators use a common PDF endpoint. Administrators save drafts and explicitly publish template revisions; history of previously issued PDFs is immutable; a missing letterhead blocks new official receipts. See [the current release guide](RELEASE_V18_6_1.md) for deployment constraints, testing and rollback.
+The `033` migration queues a pending canonical receipt per **verified payment ID**. Payment verification schedules the internal receipt worker, which uses `student-document` to archive a single private PDF and its SHA-256 fingerprint before reporting it issued. Students and administrators use a common PDF endpoint. Administrators save drafts and explicitly publish template revisions; history of previously issued PDFs is immutable; a missing institutional identity blocks new official receipts. See [the release guide](releases/RELEASE_V18_6_1.md) for deployment constraints, testing and rollback.
 
 ## Architecture decision records
 

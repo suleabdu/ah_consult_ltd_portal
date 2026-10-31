@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Real-browser check of the public homepage at desktop, tablet and mobile sizes (headless Chromium).
+ * Real-browser check of the AH Student Hub homepage at desktop, tablet and mobile sizes (headless Chromium).
  * Serves ./frontend itself and SIMULATES the network (Supabase responses and Google-hosted photos are fakes; photos are
  * flat-colour placeholders), so it verifies layout and behaviour, not live data.
  *
@@ -55,20 +55,20 @@ for (const [name, vp] of Object.entries({ desktop: { width: 1440, height: 900 },
     if (u.includes('lh3.googleusercontent.com')) { const m = u.match(/PLACEHOLDER(\d)/); return r.respond({ status: 200, contentType: 'image/svg+xml', body: svg(m ? +m[1] : 0) }); }
     return u.startsWith(base) || u.startsWith('data:') ? r.continue() : r.abort();
   });
-  await page.goto(base + '/index.html', { waitUntil: 'networkidle0', timeout: 60000 }); await new Promise((r) => setTimeout(r, 500));
+  await page.goto(base + '/student-hub.html', { waitUntil: 'networkidle0', timeout: 60000 }); await new Promise((r) => setTimeout(r, 500));
   const m = await page.evaluate(() => ({
     overflow: document.documentElement.scrollWidth - window.innerWidth, h1: document.querySelectorAll('h1').length, metrics: document.querySelectorAll('.metric').length,
     small: [...document.querySelectorAll('a.btn,button,.chip,.gal-tab,input:not([type=checkbox]),select')].filter((e) => { const b = e.getBoundingClientRect(); return b.width > 0 && getComputedStyle(e).visibility !== 'hidden' && (b.height < 44 || b.width < 44); }).map((e) => (e.textContent || e.id).trim().slice(0, 24)),
-    tiles: document.querySelectorAll('.gal-item').length, lead: document.querySelectorAll('.gal-item.feat').length, tall: document.querySelectorAll('.gal-item.tall').length,
+    tiles: document.querySelectorAll('.gal-item').length, center: document.querySelectorAll('.gal-item.is-current').length, side: document.querySelectorAll('.gal-item[data-offset="-1"], .gal-item[data-offset="1"]').length,
   }));
   check('no horizontal scrolling', m.overflow <= 0, m.overflow + 'px');
   check('every tap target is at least 44x44px', m.small.length === 0, m.small.join(', '));
   check('exactly one h1', m.h1 === 1);
   check('impact figures render (database values, omitted ones absent)', m.metrics === 3);
-  check('gallery: 9 tiles, one lead + two tall', m.tiles === 9 && m.lead === 1 && m.tall === 2);
+  check('gallery: seven or fewer image nodes, one center + two near neighbours', m.tiles <= 7 && m.center === 1 && m.side === 2);
   check('no uncaught script errors', pageErrors.length === 0, pageErrors.join('; '));
-  for (const [sel, f] of [['#home', '01_hero'], ['#services', '02_services'], ['#programs', '04_programs'], ['#gallery', '06_gallery'], ['#consult', '08_consult']]) { await page.evaluate((s) => document.querySelector(s).scrollIntoView(), sel); await new Promise((r) => setTimeout(r, 200)); await page.screenshot({ path: join(OUT, `${name}_${f}.png`) }); }
-  await page.evaluate(() => document.querySelector('#gallery').scrollIntoView()); await (await page.$('.gal-item')).click(); await new Promise((r) => setTimeout(r, 300));
+  for (const [sel, f] of [['#home', '01_hero'], ['#about', '02_about'], ['#training', '04_training'], ['#gallery', '06_gallery'], ['#consult', '08_consult']]) { await page.evaluate((s) => document.querySelector(s).scrollIntoView(), sel); await new Promise((r) => setTimeout(r, 200)); await page.screenshot({ path: join(OUT, `${name}_${f}.png`) }); }
+  await page.evaluate(() => document.querySelector('#gallery').scrollIntoView()); await (await page.$('.gal-item.is-current')).click(); await new Promise((r) => setTimeout(r, 300));
   const c1 = await page.$eval('#lb-count', (e) => e.textContent); await page.keyboard.press('ArrowRight'); const c2 = await page.$eval('#lb-count', (e) => e.textContent);
   await page.keyboard.press('ArrowLeft'); await page.keyboard.press('ArrowLeft'); const c3 = await page.$eval('#lb-count', (e) => e.textContent);
   await page.screenshot({ path: join(OUT, `${name}_10_viewer.png`) }); await page.keyboard.press('Escape'); await new Promise((r) => setTimeout(r, 150));

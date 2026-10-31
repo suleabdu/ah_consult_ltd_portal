@@ -1,7 +1,7 @@
 /* =============================================================================
-   js/home.js : behaviour for the public homepage (index.html).
+   js/home.js : behaviour for the AH Student Hub page (student-hub.html).
    - Learning Impact figures  <- rpc/public_impact_stats  (aggregates only)
-   - Training programmes      <- courses (public catalogue), with a built-in fallback list in the HTML
+   - Training programmes      <- courses (public catalogue), with an explicit unavailable/empty state
    - Gallery                  <- gallery_items WHERE status='published' (RLS enforces this server-side as well)
    Everything degrades gracefully: if the network or Supabase is unavailable the page still works.
    Only the PUBLIC anon key is used. No student data is ever requested.
@@ -117,14 +117,14 @@
     load();
   })();
 
-  /* ---------- Training programmes (DB-driven; the static list in the HTML is the fallback) ---------- */
+  /* ---------- Training programmes (DB-driven; the HTML shows a loading state until the public catalogue returns) ---------- */
   (function programmes() {
     var list = $('#programs-list');
     if (!list) return;
     var RANK = ['beginner', 'intermediate', 'advanced', 'professional'];
     var rk = function (c) { var i = RANK.indexOf(String(c).toLowerCase()); return i < 0 ? 99 : i; };
-    rest('courses?select=name,category&is_active=eq.true&order=name.asc').then(function (rows) {
-      if (!rows || !rows.length) return;
+    rest('courses?select=name,category&is_active=eq.true&workflow_status=eq.published&order=name.asc').then(function (rows) {
+      if (!rows || !rows.length) { list.textContent = ''; var empty=el('li',{'class':'prog'}); empty.appendChild(el('h3',{},'No published courses are available yet.')); list.appendChild(empty); return; }
       var by = {}, order = [];
       rows.forEach(function (r) { if (!by[r.name]) { by[r.name] = []; order.push(r.name); } if (by[r.name].indexOf(r.category) < 0) by[r.name].push(r.category); });
       list.textContent = '';
@@ -137,94 +137,164 @@
         });
         li.appendChild(levels); list.appendChild(li);
       });
-      // VRAY was listed on the original homepage but is not a registrable course: keep it as an enquiry-only entry.
-      var v = el('li', { 'class': 'prog' }), vl = el('div', { 'class': 'levels' }), va = el('a', { 'class': 'chip', href: '#consult', 'data-service': 'Training Hub' }, 'Ask about VRAY');
-      v.appendChild(el('h3', {}, 'VRAY')); vl.appendChild(va); v.appendChild(vl); list.appendChild(v);
-    }).catch(function () { /* keep the fallback list already in the page */ });
+    }).catch(function () { list.textContent=''; var li=el('li',{'class':'prog'}); li.appendChild(el('h3',{},'Course catalogue temporarily unavailable')); var note=el('div',{'class':'levels'},'Please return later or contact admissions.'); li.appendChild(note); list.appendChild(li); });
   })();
 
-  /* ---------- Gallery ---------- */
+  /* ---------- Gallery: five-card focus carousel backed by published Supabase gallery_items ---------- */
   (function gallery() {
-    var grid = $('#gal-grid'), tabs = $('#gal-tabs'), stateEl = $('#gal-state'), moreWrap = $('#gal-more'), moreBtn = $('#gal-more-btn');
-    var dlg = $('#lightbox');
-    if (!grid) return;
+    var stage = $('#gal-grid'), tabs = $('#gal-tabs'), stateEl = $('#gal-state');
+    var controls = $('#gal-controls'), playBtn = $('#gal-play'), prevBtn = $('#gal-prev'), nextBtn = $('#gal-next');
+    var posEl = $('#gal-position'), capEl = $('#gal-caption'), dlg = $('#lightbox');
+    if (!stage || !controls) return;
     var CATS = [['training', 'Training'], ['projects', 'Projects'], ['graduation', 'Graduation'], ['events', 'Events'], ['other', 'Other']];
-    var PAGE = 9, CACHE = 'ahct_gallery_v2';
-    var all = [], view = [], filter = 'all', shown = PAGE, signature = '', lastFetch = 0, pending = null;
-
-    /** Google-hosted photos accept a size suffix; everything else is used as-is. Falls back to the original on error. */
+    var CACHE = 'ahct_gallery_student_v1', all = [], view = [], filter = 'all', active = 0;
+    var signature = '', lastFetch = 0, pending = null, nodes = new Map(), lastTrigger = null;
+    var reduced = Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    var paused = reduced, hovering = false, rotating = null, touchedAt = null;
     var isGoogle = function (u) { return /^https:\/\/lh3\.googleusercontent\.com\/d\/[^=?#]+$/.test(u); };
     var sized = function (u, w) { return isGoogle(u) ? u + '=w' + w : u; };
+    var wrap = function (i, n) { return (i % n + n) % n; };
 
+    function updatePlay() {
+      playBtn.textContent = paused ? 'Play slideshow' : 'Pause slideshow';
+      playBtn.setAttribute('aria-label', paused ? 'Start automatic slideshow' : 'Pause automatic slideshow');
+      playBtn.setAttribute('aria-pressed', String(!paused));
+      playBtn.disabled = view.length < 2;
+    }
     function setState(msg, retry) {
       stateEl.hidden = false; stateEl.textContent = '';
       stateEl.appendChild(el('span', {}, msg));
       if (retry) { var b = el('button', { type: 'button', 'class': 'btn' }, 'Retry'); b.addEventListener('click', function () { setState('Loading photographs…'); refresh(true); }); stateEl.appendChild(b); }
-      grid.hidden = true; moreWrap.hidden = true; tabs.hidden = true;
+      stage.hidden = controls.hidden = tabs.hidden = true; capEl.textContent = '';
     }
-
     function applyFilter() {
-      var f = all.filter(function (g) { return !g.broken && (filter === 'all' || g.category === filter); });
-      f.sort(function (a, b) { return (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || a.sort_order - b.sort_order; });
-      // Featured photographs shape the composition: the first becomes the large lead tile, the next two tall companions
-      // (at most three in total keeps it balanced). Any further featured photographs are shown as ordinary tiles.
-      var nFeat = 0; f.forEach(function (g) { g._feat = g._tall = false; if (g.featured) { if (nFeat === 0) g._feat = true; else if (nFeat < 3) g._tall = true; nFeat++; } });
-      view = f;
+      view = all.filter(function (g) { return !g.broken && (filter === 'all' || g.category === filter); });
+      view.sort(function (a, b) { return (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || a.sort_order - b.sort_order; });
+      active = view.length ? wrap(active, view.length) : 0;
     }
-
     function buildTabs() {
-      var present = CATS.filter(function (c) { return all.some(function (g) { return g.category === c[0]; }); });
+      var present = CATS.filter(function (c) { return all.some(function (g) { return !g.broken && g.category === c[0]; }); });
       tabs.textContent = '';
       if (present.length < 2) { tabs.hidden = true; return; }
       [['all', 'All']].concat(present).forEach(function (c) {
         var b = el('button', { type: 'button', 'class': 'gal-tab', 'aria-pressed': String(filter === c[0]) }, c[1]);
-        b.addEventListener('click', function () { filter = c[0]; shown = PAGE; render(); });
+        b.addEventListener('click', function () { filter = c[0]; active = 0; nodes.clear(); stage.textContent = ''; render(); });
         tabs.appendChild(b);
       });
       tabs.hidden = false;
     }
-
+    function makeCard(g, index, offset) {
+      var b = el('button', { type: 'button', 'class': 'gal-item', 'data-photo': String(g.id),
+        'aria-label': 'View photograph: ' + (g.alt_text || g.caption || ('Photograph ' + (index + 1))) });
+      var img = el('img', { alt: g.alt_text || g.caption || 'AH Consult Ltd photograph', loading: 'lazy',
+        decoding: 'async', width: '960', height: '640' });
+      var retried = false;
+      img.addEventListener('error', function () {
+        if (!retried && isGoogle(g.image_url)) { retried = true; img.removeAttribute('srcset'); img.src = g.image_url; return; }
+        g.broken = true;
+        nodes.delete(String(g.id));
+        b.remove();
+        applyFilter(); if (active >= view.length) active = 0; render();
+      });
+      img.src = sized(g.image_url, Math.abs(offset) <= 1 ? 1000 : 560);
+      b.appendChild(img);
+      b.addEventListener('click', function () {
+        var currentIndex = view.findIndex(function (item) { return item.id === g.id; });
+        if (currentIndex < 0) return;
+        if (currentIndex === active) { lastTrigger = b; openLb(active); }
+        else { paused = true; updatePlay(); active = currentIndex; drawSlides(); }
+      });
+      return b;
+    }
+    function drawSlides() {
+      if (!view.length) return;
+      var desired = new Map();
+      [-3, -2, -1, 0, 1, 2, 3].forEach(function (offset) {
+        // On Next, the photo just viewed moves right into a blurred position.
+        var index = wrap(active - offset, view.length), g = view[index], key = String(g.id);
+        // With fewer than seven photographs, don't duplicate the same accessible image/button.
+        if (!desired.has(key) || Math.abs(offset) < Math.abs(desired.get(key).offset)) desired.set(key, { g: g, index: index, offset: offset });
+      });
+      nodes.forEach(function (node, key) {
+        if (!desired.has(key)) {
+          node.setAttribute('data-offset', Number(node.getAttribute('data-offset')) < 0 ? '-3' : '3');
+          node.setAttribute('aria-hidden', 'true'); node.tabIndex = -1;
+          node.classList.add('gal-departing');
+          setTimeout(function () { if (node.classList.contains('gal-departing') && node.parentNode) { node.remove(); nodes.delete(key); } }, reduced ? 0 : 600);
+        }
+      });
+      desired.forEach(function (item, key) {
+        var node = nodes.get(key), entering = !node;
+        if (!node) {
+          node = makeCard(item.g, item.index, item.offset);
+          node.setAttribute('data-offset', item.offset < 0 ? '-3' : '3');
+          stage.appendChild(node); nodes.set(key, node);
+        }
+        node.classList.remove('gal-departing');
+        node.setAttribute('aria-hidden', String(item.offset !== 0));
+        node.tabIndex = item.offset === 0 ? 0 : -1;
+        node.classList.toggle('is-current', item.offset === 0);
+        // Move the existing image node instead of rebuilding it; CSS animates into the next slot.
+        var target = function () { node.setAttribute('data-offset', String(item.offset)); };
+        if (entering && window.requestAnimationFrame && !reduced) window.requestAnimationFrame(target);
+        else target();
+        if (item.offset === 0 && isGoogle(item.g.image_url)) {
+          var img = node.querySelector('img');
+          if (img && img.src !== sized(item.g.image_url, 1200) && !img.dataset.full) { img.src = sized(item.g.image_url, 1200); img.dataset.full = '1'; }
+        }
+      });
+      posEl.setAttribute('aria-live', paused ? 'polite' : 'off');
+      posEl.textContent = (active + 1) + ' of ' + view.length;
+      capEl.setAttribute('aria-live', paused ? 'polite' : 'off');
+      capEl.textContent = view[active].caption || view[active].alt_text || '';
+      prevBtn.disabled = nextBtn.disabled = view.length < 2;
+      updatePlay();
+    }
     function render() {
       applyFilter(); buildTabs();
-      if (!view.length) { setState(all.length ? 'No photographs in this category yet.' : 'New photographs are coming soon.'); if (all.length) tabs.hidden = false; return; }
-      stateEl.hidden = true; grid.hidden = false; grid.textContent = '';
-      view.slice(0, shown).forEach(function (g, i) {
-        var b = el('button', { type: 'button', 'class': 'gal-item' + (g._feat ? ' feat' : g._tall ? ' tall' : ''), 'aria-label': 'View photograph' + (g.caption ? ': ' + g.caption : ' ' + (i + 1)) });
-        var img = el('img', { alt: g.alt_text || g.caption || 'AH Consult Ltd photograph', loading: 'lazy', decoding: 'async', width: g._feat ? '800' : '400', height: g._feat ? '800' : '400' });
-        var tried = false;
-        img.addEventListener('error', function () {
-          if (!tried && isGoogle(g.image_url)) { tried = true; img.removeAttribute('srcset'); img.src = g.image_url; return; }   // resized variant failed: try the original once
-          g.broken = true; b.remove();                                                                                         // unavailable image: drop the tile, never show a broken icon
-          if (!grid.children.length) render();
-        });
-        if (isGoogle(g.image_url)) { img.src = sized(g.image_url, g._feat ? 900 : 500); img.srcset = sized(g.image_url, g._feat ? 600 : 360) + ' 360w, ' + sized(g.image_url, g._feat ? 1000 : 640) + ' 640w'; img.sizes = g._feat ? '(max-width:640px) 100vw, 50vw' : '(max-width:640px) 50vw, 25vw'; }
-        else img.src = g.image_url;
-        b.appendChild(img);
-        if (g.caption) b.appendChild(el('span', { 'class': 'gal-cap', 'aria-hidden': 'true' }, g.caption));
-        b.addEventListener('click', function () { openLb(i); });
-        grid.appendChild(b);
-      });
-      moreWrap.hidden = view.length <= shown;
+      if (!view.length) { nodes.clear(); stage.textContent = ''; setState(all.length ? 'No photographs in this category yet.' : 'New photographs are coming soon.'); if (all.length) tabs.hidden = false; return; }
+      stage.hidden = controls.hidden = stateEl.hidden = false;
+      stateEl.hidden = true;
+      drawSlides();
     }
-    moreBtn.addEventListener('click', function () { shown += PAGE; render(); });
+    function move(n) { if (view.length < 2) return; active = wrap(active + n, view.length); drawSlides(); }
+    prevBtn.addEventListener('click', function () { move(-1); });
+    nextBtn.addEventListener('click', function () { move(1); });
+    playBtn.addEventListener('click', function () { paused = !paused; updatePlay(); });
+    stage.addEventListener('mouseenter', function () { hovering = true; });
+    stage.addEventListener('mouseleave', function () { hovering = false; });
+    controls.addEventListener('mouseenter', function () { hovering = true; });
+    controls.addEventListener('mouseleave', function () { hovering = false; });
+    stage.addEventListener('focusin', function () { paused = true; updatePlay(); });
+    controls.addEventListener('focusin', function () { paused = true; updatePlay(); });
+    stage.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); move(e.key === 'ArrowRight' ? 1 : -1); }
+    });
+    stage.addEventListener('touchstart', function (e) { touchedAt = e.changedTouches[0].clientX; }, { passive: true });
+    stage.addEventListener('touchend', function (e) {
+      if (touchedAt == null) return;
+      var delta = e.changedTouches[0].clientX - touchedAt; touchedAt = null;
+      if (Math.abs(delta) > 45) { paused = true; updatePlay(); move(delta < 0 ? 1 : -1); }
+    }, { passive: true });
+    rotating = setInterval(function () { if (!paused && !hovering && !document.hidden && (!dlg || !dlg.open)) move(1); }, 7200);
 
-    /* --- accessible viewer (native <dialog>: focus trap, Esc to close, focus returns to the thumbnail) --- */
+    /* Fullscreen viewer remains available; the center card opens it. */
     var cur = 0;
     function show(i) {
       if (!view.length) return;
-      cur = (i + view.length) % view.length;
+      cur = wrap(i, view.length);
       var g = view[cur], img = $('#lb-img');
       img.alt = g.alt_text || g.caption || 'AH Consult Ltd photograph';
       img.src = sized(g.image_url, 1600);
       img.onerror = function () { img.onerror = null; img.src = g.image_url; };
       $('#lb-cap').textContent = g.caption || '';
       $('#lb-count').textContent = (cur + 1) + ' / ' + view.length;
-      [1, -1].forEach(function (d) { var n = view[(cur + d + view.length) % view.length]; if (n) new Image().src = sized(n.image_url, 1600); });   // warm the neighbours
+      [1, -1].forEach(function (d) { var n = view[wrap(cur + d, view.length)]; if (n && typeof Image !== 'undefined') new Image().src = sized(n.image_url, 1200); });
       $('#lb-prev').disabled = $('#lb-next').disabled = view.length < 2;
     }
     function openLb(i) {
       if (!dlg) return;
-      show(i);
+      paused = true; updatePlay(); show(i);
       if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
       $('#lb-close').focus();
     }
@@ -238,33 +308,30 @@
       var x0 = null;
       dlg.addEventListener('touchstart', function (e) { x0 = e.changedTouches[0].clientX; }, { passive: true });
       dlg.addEventListener('touchend', function (e) { if (x0 == null) return; var dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) show(cur + (dx < 0 ? 1 : -1)); }, { passive: true });
-      dlg.addEventListener('close', function () { if (pending) { var p = pending; pending = null; ingest(p); } });   // apply any update that arrived while the viewer was open
+      dlg.addEventListener('close', function () { if (view.length) { active = cur; drawSlides(); } if (lastTrigger && lastTrigger.isConnected) lastTrigger.focus(); if (pending) { var p = pending; pending = null; ingest(p); } });
     }
 
-    /* --- data: cache first, then revalidate; poll + realtime keep it fresh --- */
+    /* Cache-first published data; retain existing polling and Realtime synchronization. */
     function ingest(rows) {
       var sig = JSON.stringify(rows.map(function (r) { return [r.id, r.image_url, r.caption, r.alt_text, r.category, r.featured, r.sort_order]; }));
       if (sig === signature) return;
       if (dlg && dlg.open) { pending = rows; return; }
-      signature = sig; all = rows.map(function (r) { r.broken = false; return r; }); render();
+      signature = sig; all = rows.filter(function (r) { return !stage.dataset.scope || stage.dataset.scope !== 'student' || ['training','graduation','events'].includes(r.category); }).map(function (r) { r.broken = false; return r; });
+      nodes.clear(); stage.textContent = ''; active = 0; render();
     }
     function refresh(manual) {
       lastFetch = Date.now();
-      return rest('gallery_items?select=id,image_url,caption,alt_text,category,featured,sort_order&status=eq.published&order=sort_order.asc,created_at.asc&limit=200')
+      return rest('gallery_items?select=id,image_url,caption,alt_text,category,featured,sort_order&status=eq.published&category=in.(training,graduation,events)&order=sort_order.asc,created_at.asc&limit=200')
         .then(function (rows) {
           try { localStorage.setItem(CACHE, JSON.stringify({ t: Date.now(), rows: rows })); } catch (e) { /* private mode */ }
-          if (!rows.length) { signature = '[]'; all = []; setState('New photographs are coming soon.'); return; }
+          if (!rows.length) { signature = '[]'; all = []; nodes.clear(); stage.textContent = ''; setState('New photographs are coming soon.'); return; }
           ingest(rows);
-        })
-        .catch(function () { if (!all.length) setState('Photographs could not be loaded right now.', true); else if (manual) setState('Photographs could not be refreshed.', true); });
+        }).catch(function () { if (!all.length) setState('Photographs could not be loaded right now.', true); else if (manual) setState('Photographs could not be refreshed.', true); });
     }
     try { var c = JSON.parse(localStorage.getItem(CACHE) || 'null'); if (c && c.rows && c.rows.length) ingest(c.rows); } catch (e) { /* ignore */ }
     refresh();
-
-    setInterval(function () { if (!document.hidden) refresh(); }, 60000);                                                     // reliable fallback
+    setInterval(function () { if (!document.hidden) refresh(); }, 60000);
     document.addEventListener('visibilitychange', function () { if (!document.hidden && Date.now() - lastFetch > 30000) refresh(); });
-
-    // Supabase Realtime accelerates updates; it is loaded lazily after the page is idle and is optional.
     var debounce = null, onChange = function () { clearTimeout(debounce); debounce = setTimeout(refresh, 600); };
     function subscribe() {
       try {

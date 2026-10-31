@@ -1,6 +1,6 @@
 // Permanent deletion (Administrator only). Removes the record AND its files, writes an audit entry, and removes the Google Sheet row.
 import { admin, json, safe, userFrom } from "../_shared/lib.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { kickSheetSync } from "../_shared/sync.ts";
 Deno.serve(safe(async (req) => {
   const user = await userFrom(req); if (!user) return json({ error: "Please sign in again." }, 401);

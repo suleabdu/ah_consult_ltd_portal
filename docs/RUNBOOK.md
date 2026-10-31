@@ -3,9 +3,10 @@
 ## Before every release
 ```
 python3 scripts/validate.py                                   # static gate (secrets, links, headers, JS syntax)
+npm run audit:production                                      # high/critical production dependency gate
 cd supabase/functions && deno test --no-check _shared/        # payment parsing and guard unit tests
 for d in */; do deno check ${d}index.ts; done                 # type-check (skip _shared)
-DATABASE_URL=postgres:///hub_test ./scripts/test-sql.sh       # wipes a LOCAL scratch database, applies 001-025, runs all SQL tests
+DATABASE_URL=postgres:///hub_test ./scripts/test-sql.sh       # wipes a LOCAL scratch database, applies every numbered migration, runs all SQL tests
 npm ci && npm run check                                        # release gate + undefined-name lint + all frontend unit/DOM tests
 node tests/browser/homepage.browser.mjs                        # optional: real Chromium at 3 screen sizes (see docs/HOMEPAGE.md)
 ```
@@ -32,4 +33,13 @@ node tests/browser/homepage.browser.mjs                        # optional: real 
 Migrations 021 and 022 contain consolidated repair logic for earlier drift. Always start new environments from 001 and apply all files in order; do not replay individual old migrations on an existing database.
 
 ## Local frontend testing
-Fill `LOCAL` in `frontend/js/config.js` with a separate staging project before opening pages from disk; otherwise local pages talk to the live project.
+
+The checked-in `frontend/js/config.js` is inert and does not point at a live project. For an interactive local preview, generate a temporary configuration from a separate staging project:
+
+```powershell
+$env:AHCT_STAGING_URL = 'https://YOUR_STAGING_PROJECT.supabase.co'
+$env:AHCT_STAGING_ANON_KEY = 'YOUR_STAGING_ANON_KEY'
+npm run configure:frontend
+```
+
+Do not commit the generated file. Restore the inert configuration before making a review commit, and never use production records in local or browser tests.

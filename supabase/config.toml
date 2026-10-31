@@ -17,9 +17,12 @@ verify_jwt = false
 [functions.document-branding]
 verify_jwt = false
 
-# Local Supabase only. For the hosted project, configure the equivalent setting
-# in Supabase Dashboard > Authentication > Providers > Email > Confirm Email OFF.
-# With confirmations disabled, signUp returns a session and applicants enter
-# their application portal immediately. Do not bypass provider auth tokens.
+# Require ownership of the supplied email address before an applicant receives a
+# session. Mirror this setting in Supabase Dashboard > Authentication > Providers
+# > Email for every hosted environment, with a verified SMTP sender configured.
 [auth.email]
-enable_confirmations = false
+enable_confirmations = true
+
+# The browser Auth access token is checked inside this function, with request-aware CORS.
+[functions.admin-bulk-import]
+verify_jwt = false

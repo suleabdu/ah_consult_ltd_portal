@@ -17,7 +17,7 @@ async function start(){
  const {data:me}=await sb.from('staff').select('*').eq('id',session.user.id).maybeSingle();
  if(!me||me.status!=='approved'){await sb.auth.signOut();return location.replace('staff-login.html')}
  if(me.role==='tutor')return location.replace('tutor.html');
- const isAdmin=me.role==='administrator',lvl=m=>isAdmin?'write':(((D.perms||[]).find(p=>p.role===me.role&&p.module===m)||{}).level||((FALLBACK[me.role]||{})[m])||'none'),can=k=>({pay:lvl('payments')==='write',adm:lvl('applications')==='write',intake:lvl('intakes')==='write',lect:lvl('lecturers')==='write',del:isAdmin})[k];
+ const isAdmin=me.role==='administrator',lvl=m=>isAdmin?'write':(((D.perms||[]).find(p=>p.role===me.role&&p.module===m)||{}).level||((FALLBACK[me.role]||{})[m])||'none'),can=k=>({pay:lvl('payments')==='write',adm:lvl('applications')==='write',intake:lvl('intakes')==='write',lect:lvl('lecturers')==='write',course:lvl('courses')==='write',media:lvl('media')==='write',del:isAdmin})[k];
  $('#gate').hidden=true;$('#app').hidden=false;$('#me').innerHTML=esc(me.full_name)+' <span class="role">'+esc(ROLES[me.role]||me.role)+'</span>';$('#orgName').textContent=L.org;$('#yr').textContent=new Date().getFullYear();
  const D={apps:[],courses:[],intakes:[],lects:[],lc:[],lectures:[],assigns:[],fb:[],staff:[],audit:[],sync:null,errs:[],perms:[],prov:[],site:{},codes:[],adds:[],deferments:[],lectStats:[],tutorAccounts:[]};let view='overview',F={q:'',st:'',intake:'',course:''},DQ='';const selectedApps=new Set();let designerSelectedKind='admission_letter';
  const signOut=exp=>{try{const pending=sb.auth.signOut({scope:'local'});if(pending&&typeof pending.catch==='function')pending.catch(()=>{})}catch(_){}try{const ref=new URL(C.SUPABASE_URL).hostname.split('.')[0],key='sb-'+ref+'-auth-token';[localStorage,sessionStorage].forEach(store=>{store.removeItem(key);store.removeItem(key+'-code-verifier')})}catch(_){}location.replace('staff-login.html'+(exp?'?expired=1':''))};$('#so').onclick=()=>signOut();
@@ -91,6 +91,7 @@ async function start(){
   const H2=['Name','Reference','Amount','Confirmed','Status'];const ok=D.apps.filter(a=>a.paid_at).slice(0,25).map(a=>trow(H2,[esc(name(a)),esc(a.pay_reference),naira(a.total_ngn),new Date(a.paid_at).toLocaleString(),pill(a)]));
   const qd=D.apps.filter(a=>a.status==='pending_payment'&&a.payment_review==='rejected').map(a=>trow(['Name','Reference','Amount','Your query'],[esc(name(a)),esc(a.pay_reference),naira(a.total_ngn),esc(a.payment_note||'')]));
   return`<h1>Payments</h1><p class="sub">Approve a payment once you have seen it in the bank, or send the applicant a query. They are notified on their dashboard.</p><h3>Waiting for verification (${q.length})</h3>${tbl(H,q)}<h3 style="margin-top:20px">Queried (${qd.length})</h3>${tbl(['Name','Reference','Amount','Your query'],qd)}<h3 style="margin-top:20px">Recently confirmed</h3>${tbl(H2,ok)}<section class="panel"><h3>Official payment receipts</h3><p class="sub">Verified transactions are listed below, including archived PDF status. Preview, download or print the archived original. Reissue logs a certified-copy request and never changes the original PDF.</p><div class="row"><button type="button" class="btn g" id="refreshAdminReceipts">Refresh receipts</button></div><div id="adminReceiptRegister" role="region" aria-live="polite">Loading verified receipt register…</div></section>${addsPanel()}`};
+ V.bulkImport=()=>window.AHCTBulkRegistration?.page(D.courses,D.intakes)||'<p class="sub">Bulk importer is unavailable. Refresh the page.</p>';
  V.intakes=()=>{const w=can('intake'),rows=D.intakes.map(i=>{const s=intakeState(i);return`<div class="panel" data-i="${i.id}"><div class="row" style="margin:0;align-items:center"><b>${esc(i.label)}</b><span class="pill ${s[0]}">${s[1]}</span><span class="sp"></span><small>${live().filter(a=>a.intake_id===i.id).length} ${L.people.toLowerCase()}</small></div>
   <div class="grid" style="margin-top:10px"><label>Opens<input class="in" type="date" data-f="o" value="${day(i.opens_at)}" ${w?'':'disabled'}></label><label>Closes<input class="in" type="date" data-f="c" value="${day(i.closes_at)}" ${w?'':'disabled'}></label></div>
   ${w?`<div class="row"><button class="btn s" data-ia="save">Save dates</button>${s[1]==='Closed'?'<button class="btn s g" data-ia="open">Reopen</button>':'<button class="btn s r" data-ia="close">Close now</button>'}</div>`:''}</div>`}).join('');
@@ -162,8 +163,8 @@ async function start(){
  /* ======== permissions-aware helpers, attention list, landing ======== */
  const FALLBACK={registrar:{applications:'write',payments:'read',intakes:'write',courses:'read',lecturers:'read'},finance:{applications:'read',payments:'write',intakes:'read',courses:'read',lecturers:'read'},academic:{applications:'read',intakes:'write',courses:'write',lecturers:'write'},operations:{applications:'read',intakes:'read',courses:'read',lecturers:'read'},viewer:{applications:'read',intakes:'read',courses:'read',lecturers:'read'}};
  const KINDS={manual:'Manual bank transfer',monnify:'Monnify',upperlink:'Upperlink'};
- const NAV2=[['overview','Overview',()=>true],['apps','Applications',()=>lvl('applications')!=='none'],['payments','Payments',()=>lvl('payments')!=='none'],['intakes','Intakes',()=>lvl('intakes')!=='none'],['lecturers','Academics',()=>lvl('lecturers')!=='none'],['documents','Documents',()=>lvl('applications')!=='none'],['docTemplates','Document designer',()=>isAdmin],['intelligence','Reports & analytics',()=>true],['sync','Sheet sync',()=>isAdmin],['deferments','Deferments',()=>lvl('applications')!=='none'],['payset','Payment methods',()=>isAdmin],['team','Staff & access',()=>isAdmin],['perms','Role permissions',()=>isAdmin],['site','Website settings',()=>isAdmin],['audit','Audit trail',()=>isAdmin],['health','System health',()=>isAdmin||me.role==='operations'||me.role==='viewer'],['release','Release checks',()=>isAdmin||me.role==='academic'],['archives','Archives',()=>isAdmin],['danger','Restricted deletion',()=>isAdmin]];
- const MAIN_NAV=new Set(['overview','apps','payments','intakes','lecturers','documents','intelligence','sync']);
+ const NAV2=[['overview','Overview',()=>true],['apps','Applications',()=>lvl('applications')!=='none'],['bulkImport','Bulk registration',()=>can('adm') && ['administrator','registrar'].includes(me.role)],['payments','Payments',()=>lvl('payments')!=='none'],['intakes','Intakes',()=>lvl('intakes')!=='none'],['courses','Course catalogue',()=>lvl('courses')!=='none'],['media','Homepage gallery',()=>lvl('media')==='write'],['lecturers','Academics',()=>lvl('lecturers')!=='none'],['documents','Documents',()=>lvl('applications')!=='none'],['docTemplates','Document designer',()=>isAdmin],['intelligence','Reports & analytics',()=>true],['sync','Sheet sync',()=>isAdmin],['deferments','Deferments',()=>lvl('applications')!=='none'],['payset','Payment methods',()=>isAdmin],['team','Staff & access',()=>isAdmin],['perms','Role permissions',()=>isAdmin],['site','Website settings',()=>isAdmin],['audit','Audit trail',()=>isAdmin],['health','System health',()=>isAdmin||me.role==='operations'||me.role==='viewer'],['release','Release checks',()=>isAdmin||me.role==='academic'],['archives','Archives',()=>isAdmin],['danger','Restricted deletion',()=>isAdmin]];
+ const MAIN_NAV=new Set(['overview','apps','bulkImport','payments','intakes','courses','lecturers','documents','intelligence','sync']);
  const navf=()=>NAV2.filter(n=>n[2]());
  const landing=()=>{const r=me.role;if(r==='registrar'&&lvl('applications')!=='none'){F.st='Submitted';return'apps'}if(r==='finance'&&lvl('payments')!=='none')return'payments';if(r==='academic'&&lvl('lecturers')!=='none')return'lecturers';return'overview'};
  const attention=()=>{const t=[],n1=verify().length,n2=live().filter(a=>submitted(a)&&a.admission_decision==='pending').length,n3=D.adds.filter(x=>x.status==='payment_claimed').length,n4=D.staff.filter(s=>s.status==='pending').length;
@@ -205,7 +206,7 @@ async function start(){
  const addsPanel=()=>{const H=['Student','Course','Fee','Status','Action'],rows=D.adds.filter(x=>['pending_payment','payment_claimed'].includes(x.status)).map(x=>trow(H,[`<b>${esc(x.applications?.profiles?.full_name||'')}</b><br><small>${esc(x.applications?.student_id||x.applications?.pay_reference||'')}</small>`,esc(x.courses?.name||x.course_code),naira(x.fee_ngn),`<span class="pill ${x.status==='payment_claimed'?'wait':'none'}">${x.status==='payment_claimed'?'Student says paid':'Awaiting payment'}</span>`,lvl('payments')==='write'?`<button class="btn s" data-add="approved" data-id="${x.id}">Approve</button> <button class="btn s r" data-add="query" data-id="${x.id}">Query</button>`:'']));
   return`<h3 style="margin-top:20px">Extra-course requests (${rows.length})</h3>${tbl(H,rows)}`};
  /* ======== Roles & permissions ======== */
- const MODS=[['applications','Applications','Read: view applications. Write: decide admissions.'],['payments','Payments','Read: view payments. Write: approve and query payments.'],['intakes','Intakes','Write: create, edit and close intakes.'],['courses','Courses & packages','Write: change courses and fees.'],['lecturers','Lecturers','Write: add lecturers and assign courses.']];
+ const MODS=[['applications','Applications','Read: view applications. Write: decide admissions.'],['payments','Payments','Read: view payments. Write: approve and query payments.'],['intakes','Intakes','Write: create, edit and close intakes.'],['courses','Courses & packages','Write: register courses. Administrator approval and publication required.'],['media','Homepage gallery','Write: add, publish, archive and delete photos.'],['lecturers','Lecturers','Write: add lecturers and assign courses.']];
  const PROLES=['registrar','finance','academic','operations','viewer','tutor'];
  V.perms=()=>{const get=(r,m)=>(D.perms.find(p=>p.role===r&&p.module===m)||{}).level||'none';
   const head=`<tr><th>Area</th><th>Administrator</th>${PROLES.map(r=>`<th>${esc(ROLES[r])}</th>`).join('')}</tr>`,
@@ -227,13 +228,80 @@ async function start(){
   m.querySelector('#c_go').onclick=async e=>{e.target.disabled=true;try{const r=await api('admin-settings',{action:'code_create',label:m.querySelector('#c_l').value.trim()||'Staff code',allowedRoles:[...m.querySelectorAll('input[type=checkbox]:checked')].map(x=>x.value),maxUses:m.querySelector('#c_m').value,expiresDays:m.querySelector('#c_d').value,custom:m.querySelector('#c_c').value});m.remove();
    const s=modal(`<h3>Your new code</h3><p class="sub">Copy it now. For security it cannot be shown again.</p><div class="code" style="font-size:20px;padding:12px;text-align:center">${esc(r.code)}</div><div class="row"><button class="btn" id="cp">Copy</button><button class="btn g" id="dn">Done</button></div>`);
    s.querySelector('#cp').onclick=()=>{navigator.clipboard?.writeText(r.code);toast('Copied.')};s.querySelector('#dn').onclick=async()=>{s.remove();await load();render(true)}}catch(err){e.target.disabled=false;toast(err.message,1)}}}
+ /* ======== Governed course catalogue (migration 042) ======== */
+ const CATEGORY_LEVELS=[['Beginner','1'],['Intermediate','2'],['Professional','3']];
+ V.courses=()=>{
+  const allowed=can('course');
+  const rows=D.courses.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name))||String(a.category).localeCompare(String(b.category))).map(c=>{
+    const st=c.workflow_status|| (c.is_active?'published':'retired'),approved=st==='approved',draft=st==='draft',published=st==='published'&&c.is_active;
+    return trow(['Code','Course','Level / fee','Status','Full Package','Actions'],[
+      `<strong>${esc(c.code)}</strong>`,`<b>${esc(c.name)}</b>`,`<span>${esc(c.category)}</span><br><small>${naira(c.fee_ngn)}</small>`,
+      `<span class="pill ${published?'ok':draft?'wait':approved?'info':'none'}">${esc(st)}</span>`,
+      published?`<label class="chk" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-pkg="${esc(c.code)}" ${c.in_full_package?'checked':''} ${!isAdmin?'disabled':''}> Included</label>${c.package_requested&&!c.in_full_package?'<small>Requested — awaiting admin confirmation</small>':''}`:(c.package_requested?'Requested — admin must confirm after publishing':'Not requested'),
+      `${allowed&&['draft','rejected'].includes(st)&&c.created_by===me.id?`<button class="btn s g" data-course-action="edit" data-code="${esc(c.code)}">Edit draft</button>`:''}${isAdmin?`${draft&&c.created_by!==me.id?`<button class="btn s" data-course-action="approve" data-code="${esc(c.code)}">Approve</button> <button class="btn s r" data-course-action="reject" data-code="${esc(c.code)}">Reject</button>`:''}${approved?`<button class="btn s" data-course-action="publish" data-code="${esc(c.code)}">Publish</button>`:''}${published?`<button class="btn s g" data-course-action="retire" data-code="${esc(c.code)}">Retire</button>`:''}`:''}`
+    ]);
+  });
+  return `<h1>Course catalogue &amp; publishing</h1><p class="sub">Only authorized officers register courses. new codes have one to four letters followed by <b>1</b> Beginner, <b>2</b> Intermediate or <b>3</b> Professional (example: ACAD1, ACAD2, ACAD3). A separate administrator approves and publishes courses. Historic course codes remain unchanged.</p>
+  ${allowed?`<div class="panel"><h3>Register new course (draft)</h3><div class="grid">
+  <label>Course name<input id="courseName" class="in" maxlength="120" placeholder="e.g. Architectural Design"></label>
+  <label>Code letters (max 4)<input id="courseLetters" class="in" maxlength="4" pattern="[A-Za-z]{1,4}" autocomplete="off" placeholder="e.g. ARCD"></label>
+  <label>Category<select id="courseLevel" class="in">${CATEGORY_LEVELS.map(([c])=>`<option value="${c}">${c}</option>`).join('')}</select></label>
+  <label class="chk" style="align-self:center"><input type="checkbox" id="courseAll"> Apply to all three categories</label></div>
+  <div class="grid" id="courseFees">${CATEGORY_LEVELS.map(([c,n])=>`<label data-fee-level="${c}">${c} fee (NGN)<input class="in" type="number" id="fee${n}" min="1" max="99999999" step="1" placeholder="Enter fee"></label>`).join('')}</div>
+  <label class="chk"><input type="checkbox" id="coursePackage"> Request Full Package inclusion (administrator must confirm separately after publication)</label>
+  <p id="coursePreview" class="sub" role="status">Code preview: ACAD1</p>
+  <button class="btn" id="courseCreate">Save course draft</button></div>`:''}
+  <div class="panel"><h3>Registered courses</h3>${tbl(['Code','Course','Level / fee','Status','Full Package','Actions'],rows)}</div>`;
+ };
+ function wireCourses(M){
+  const name=M.querySelector('#courseName'),letters=M.querySelector('#courseLetters'),level=M.querySelector('#courseLevel'),all=M.querySelector('#courseAll');
+  if(name){
+    const preview=()=>{letters.value=letters.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,4);const val=letters.value||'XXXX';
+      M.querySelector('#coursePreview').textContent='Code preview: '+(all.checked?CATEGORY_LEVELS.map(([c,n])=>val+n).join(' · '):val+CATEGORY_LEVELS.find(([c])=>c===level.value)[1]);
+      M.querySelectorAll('[data-fee-level]').forEach(x=>x.hidden=!all.checked&&x.dataset.feeLevel!==level.value);
+    };
+    [letters,level,all].forEach(x=>x.addEventListener('input',preview));preview();
+    M.querySelector('#courseCreate').onclick=async e=>{
+      const fees={};CATEGORY_LEVELS.forEach(([c,n])=>{const input=M.querySelector('#fee'+n);if(all.checked||c===level.value)fees[c]=String(input.value).trim()});
+      if(name.value.trim().length<3||name.value.trim().length>120||!/^[A-Z]{1,4}$/.test(letters.value))return toast('Enter a course name and up to 4 letters.',1);
+      if(Object.values(fees).some(x=>!/^\d{1,8}$/.test(x)||+x<1))return toast('Enter a valid positive fee for each selected category.',1);
+      e.target.disabled=true;
+      const r=await sb.rpc('ahct_course_create',{p_name:name.value.trim(),p_letters:letters.value,p_category:level.value,p_all_categories:all.checked,p_fees:fees,p_full_package:M.querySelector('#coursePackage').checked});
+      e.target.disabled=false;if(r.error)return toast(r.error.message,1);toast('Draft saved: '+(r.data||[]).join(', ')+'. An independent administrator must approve and publish it; package inclusion needs separate confirmation.');await load();render(true);
+    };
+  }
+  M.querySelectorAll('[data-pkg]').forEach(x=>x.onchange=async()=>{
+    const value=x.checked;x.disabled=true;const r=await sb.rpc('ahct_course_package',{p_code:x.dataset.pkg,p_include:value});
+    if(r.error){x.checked=!value;toast(r.error.message,1)}else{toast('Full Package eligibility updated.');await load();render(true)}x.disabled=false;
+  });
+  M.querySelectorAll('[data-course-action]').forEach(b=>b.onclick=async()=>{
+    const action=b.dataset.courseAction,code=b.dataset.code;
+    if(action==='edit'){
+      const item=D.courses.find(c=>c.code===code);if(!item)return;
+      const m=modal(`<h3>Edit draft — ${esc(item.code)}</h3><p class="sub">The allocated code and category cannot change. Rejected courses return to Draft for a fresh independent review.</p><label>Course name<input id="cdName" class="in" value="${esc(item.name)}" maxlength="120"></label><label>Fee (NGN)<input id="cdFee" class="in" type="number" min="1" max="99999999" value="${Number(item.fee_ngn)||0}"></label><label><input type="checkbox" id="cdPackage" ${item.package_requested?'checked':''}> Request Full Package inclusion</label><div class="row"><button class="btn" id="cdSave">Save draft</button><button class="btn g" id="cdCancel">Cancel</button></div>`);
+      m.querySelector('#cdCancel').onclick=()=>m.remove();
+      m.querySelector('#cdSave').onclick=async e=>{
+        const n=m.querySelector('#cdName').value.trim(),fee=Number(m.querySelector('#cdFee').value);
+        if(n.length<3||n.length>120||!Number.isInteger(fee)||fee<1||fee>99999999)return toast('Enter a valid course name and fee.',1);
+        e.target.disabled=true;const r=await sb.rpc('ahct_course_update_draft',{p_code:code,p_name:n,p_fee:fee,p_full_package:m.querySelector('#cdPackage').checked});
+        if(r.error){e.target.disabled=false;return toast(r.error.message,1)}m.remove();toast('Draft updated for independent review.');await load();render(true);
+      };return;
+    }
+    const question={approve:'Approve course '+code+'?',publish:'Publish '+code+' for new student applications?',retire:'Retire '+code+'? Existing student records remain unchanged.',reject:'Reject course '+code+'?'}[action];
+    if(!confirm(question))return;
+    let note=null;if(action==='reject'){note=await askNote('Reject '+code,'Give the officer an explanation (minimum 8 characters)','Reject course');if(note===null)return;}
+    b.disabled=true;const r=action==='approve'||action==='reject'?await sb.rpc('ahct_course_review',{p_codes:[code],p_approve:action==='approve',p_note:note}):action==='publish'?await sb.rpc('ahct_course_publish',{p_codes:[code]}):await sb.rpc('ahct_course_retire',{p_code:code});
+    b.disabled=false;if(r.error)return toast(r.error.message,1);toast('Course '+action+' successful.');await load();render(true);
+  });
+ }
+ V.media=()=>`<h1>Homepage gallery</h1><p class="sub">Authorized photo editors can add, categorize, publish, archive, rearrange and remove images. Existing branding settings remain administrator-only.</p><div class="panel"><div id="galMgr"><p class="sub">Loading gallery…</p></div></div>`;
  /* ======== Website & branding ======== */
- const SLOTS=[['hero','Home page hero background','Wide photo behind the main headline'],['auth','Apply / login side photo','Photo beside the sign-in forms'],['training','Training hub card',''],['materials','Materials hub card',''],['printing3d','3D printing & modelling card',''],['svc_real_estate','Service: Real estate',''],['svc_design','Service: Architectural design',''],['svc_construction','Service: Building construction',''],['svc_consultancy','Service: Consultancy',''],['svc_general','Service: General services','']];
+ const SLOTS=[['hero','AH Consult corporate hero','Featured corporate photograph'],['auth','Apply / login side photo','Photo beside the sign-in forms'],['training','Student Hub landing-page hero','Student training photograph'],['materials','Materials hub card',''],['printing3d','3D printing & modelling card',''],['svc_real_estate','Service: Real estate',''],['svc_design','Service: Architectural design',''],['svc_construction','Service: Building construction',''],['svc_interior','Service: Interior design',''],['svc_consultancy','Service: Consultancy',''],['svc_general','Service: General services','']];
  const FONTS=['Montserrat','Roboto','Open Sans','Poppins','Lato','Inter','Nunito','Raleway','Playfair Display','Merriweather','Source Sans 3'];
  const THEME0={primary:'#ea580c',primaryDark:'#c2410c',dark:'#111827',fontHeading:'Montserrat',fontBody:'Roboto',baseSize:'14',headingScale:'1'};
  async function shrink(file,max=1600){if(/svg|icon|gif/.test(file.type))return file;const bmp=await createImageBitmap(file),sc=Math.min(1,max/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
   const type=file.type==='image/png'?'image/png':'image/jpeg';return new Promise(r=>c.toBlob(b=>r(b),type,.86))}
- async function uploadAsset(folder,file){if(file.size>8*1024*1024)throw new Error('That image is over 8 MB. Choose a smaller one.');const blob=await shrink(file),ext=/svg/.test(file.type)?'svg':/icon/.test(file.type)?'ico':blob.type==='image/png'?'png':/gif/.test(file.type)?'gif':'jpg',path=`${folder}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+ async function uploadAsset(folder,file){if(folder==='gallery'&&!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Upload JPEG, PNG or WebP photos only.');if(file.size>8*1024*1024)throw new Error('That image is over 8 MB. Choose a smaller one.');const blob=await shrink(file),ext=/svg/.test(file.type)?'svg':/icon/.test(file.type)?'ico':blob.type==='image/png'?'png':/gif/.test(file.type)?'gif':'jpg',path=`${folder}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
   const r=await sb.storage.from('site-assets').upload(path,blob,{contentType:blob.type||file.type,upsert:true});if(r.error)throw new Error(r.error.message);return sb.storage.from('site-assets').getPublicUrl(path).data.publicUrl}
  const saveSite=async(key,value)=>{const r=await sb.from('site_settings').upsert({key,value,updated_by:me.id});if(r.error)throw new Error(r.error.message);D.site[key]=value;try{localStorage.removeItem('ahct_site')}catch(e){}};
  const loadFont=f=>{if(!f||document.getElementById('gf_'+f.replace(/\W/g,'')))return;const l=document.createElement('link');l.id='gf_'+f.replace(/\W/g,'');l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family='+encodeURIComponent(f).replace(/%20/g,'+')+':wght@400;700;900&display=swap';document.head.appendChild(l)};
@@ -263,7 +331,7 @@ async function start(){
    <div id="tprev" style="margin-top:12px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden"><div id="tp_h" style="padding:10px 14px;color:#fff;font-weight:700">Header bar</div><div style="padding:14px"><div id="tp_t" style="font-weight:900;text-transform:uppercase">Heading preview</div><p id="tp_b" style="margin:6px 0 10px">Body text looks like this across the website.</p><span id="tp_btn" style="display:inline-block;color:#fff;border-radius:8px;padding:8px 16px;font-weight:700">Button</span></div></div>
    <div class="row"><button class="btn" id="saveTheme">Save colours &amp; fonts</button><button class="btn g" id="resetTheme">Reset to defaults</button></div></div>
   <div class="panel"><h3>Images</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">${SLOTS.map(s=>slot(...s)).join('')}</div></div>
-  <div class="panel"><h3>Home page gallery</h3><p class="sub">Only photographs marked <b>Published</b> appear on the public homepage, and they appear without a redeploy (visitors see changes within about a minute). New uploads are saved as <b>Drafts</b> unless you tick “Publish immediately”. Archive hides a photo but keeps it.</p><div id="galMgr"><p class="sub">Loading gallery…</p></div></div>`};
+  `};
  function wireSite(M){const prev=()=>{const g=id=>M.querySelector('#t_'+id).value;['fontHeading','fontBody'].forEach(k=>loadFont(g(k)));const p=M.querySelector('#tprev');M.querySelector('#tp_h').style.background=g('dark');M.querySelector('#tp_btn').style.background=g('primary');M.querySelector('#tp_t').style.cssText=`font-weight:900;text-transform:uppercase;color:${g('primary')};font-family:'${g('fontHeading')}',sans-serif;font-size:${1.2*g('headingScale')}rem`;M.querySelector('#tp_b').style.cssText=`margin:6px 0 10px;font-family:'${g('fontBody')}',sans-serif;font-size:${g('baseSize')}px`};
   M.querySelectorAll('[id^=t_]').forEach(x=>x.oninput=prev);prev();
   const theme=()=>({primary:M.querySelector('#t_primary').value,primaryDark:M.querySelector('#t_primaryDark').value,dark:M.querySelector('#t_dark').value,fontHeading:M.querySelector('#t_fontHeading').value,fontBody:M.querySelector('#t_fontBody').value,baseSize:M.querySelector('#t_baseSize').value,headingScale:M.querySelector('#t_headingScale').value});
@@ -277,7 +345,7 @@ async function start(){
   M.querySelectorAll('[data-brand]').forEach(i=>i.onchange=async()=>{const f=i.files[0];if(!f)return;try{toast('Uploading...');const u=await uploadAsset('branding',f);await saveSite('branding',{...(D.site.branding||{}),[i.dataset.brand]:u});render(true);toast('Saved.')}catch(err){toast(err.message,1)}});
   M.querySelectorAll('[data-slot]').forEach(i=>i.onchange=async()=>{const f=i.files[0];if(!f)return;try{toast('Uploading...');const u=await uploadAsset('images',f);await saveSite('images',{...(D.site.images||{}),[i.dataset.slot]:u});render(true);toast('Saved.')}catch(err){toast(err.message,1)}});
   M.querySelectorAll('[data-slotdel]').forEach(b=>b.onclick=async()=>{const im={...(D.site.images||{})};delete im[b.dataset.slotdel];await saveSite('images',im);render(true)});
-  galleryManager(M)}
+  }
  /* ===== Home page gallery manager (table: gallery_items). Row-level security allows administrators only. ===== */
  async function galleryManager(M){
   const box=M.querySelector('#galMgr');if(!box)return;
@@ -333,7 +401,22 @@ async function start(){
   box.addEventListener('click',async e=>{
    const b=e.target.closest('[data-act]');if(!b)return;const row=b.closest('[data-id]'),id=row.dataset.id,act=b.dataset.act;
    try{
-    if(act==='del'){if(!confirm('Delete this photo permanently? (Archive hides it but keeps it.)'))return;const r=await sb.from('gallery_items').delete().eq('id',id);if(r.error)throw new Error(r.error.message);items=items.filter(x=>x.id!==id);draw();toast('Deleted.');return}
+    if(act==='del'){
+      if(!confirm('Remove this photo from the homepage? This cannot be undone. Archive it instead if you may need it later.'))return;
+      const image=items.find(x=>x.id===id);const r=await sb.from('gallery_items').delete().eq('id',id);
+      if(r.error)throw new Error(r.error.message);items=items.filter(x=>x.id!==id);
+      let cleanupFailed=false;
+      if(image?.image_url){try{
+        const u=new URL(image.image_url),host=new URL(C.SUPABASE_URL).host,marker='/storage/v1/object/public/site-assets/gallery/';
+        if(u.host===host&&u.pathname.startsWith(marker)){
+          const path='gallery/'+decodeURIComponent(u.pathname.slice(marker.length));
+          if(!path.includes('..')&&!path.includes('\\')){
+            const clean=await sb.storage.from('site-assets').remove([path]);if(clean.error)cleanupFailed=true;
+          }
+        }
+      }catch(_){cleanupFailed=true}}
+      draw();toast(cleanupFailed?'Photo unpublished, but storage cleanup needs an admin review.':'Photo removed.');return}
+
     const list=shown(),i=list.findIndex(x=>x.id===id),o=list[act==='up'?i-1:i+1];if(!o)return;
     const me2=items.find(x=>x.id===id),a=me2.sort_order,c=o.sort_order;await patch(id,{sort_order:c});await patch(o.id,{sort_order:a});
     items.sort((x,y)=>x.sort_order-y.sort_order);draw();
@@ -413,6 +496,7 @@ async function start(){
  V.sync=()=>`<h1>Google Sheets Reconciliation</h1><p class="sub">Supabase remains the source of truth. This screen monitors the mirror queue; it does not silently overwrite database data.</p><div id="syncKpi" class="cards"><div class="card"><small>Loading</small><b>…</b></div></div><div class="panel"><h3>Reconciliation</h3><p id="syncDetail" class="sub">Loading…</p><div class="row"><button class="btn" id="syncRetry">Process pending jobs</button><button class="btn g" id="syncResync">Queue a full mirror refresh</button><button class="btn g" id="syncDiagnose">Check connection</button></div></div>`;
 
  function wireNew(M){
+  if(view==='bulkImport')window.AHCTBulkRegistration?.mount({root:M,api,toast,load,render});
   if(view==='release'&&(isAdmin||me.role==='academic')){
    const box=$('#releaseChecks'),summary=$('#releaseSummary'),meta=$('#releaseRunMeta'),button=$('#runReleaseChecks');
    const run=async()=>{button.disabled=true;button.textContent='Checking…';box.setAttribute('aria-busy','true');box.innerHTML='<p class="sub">Running database and security checks…</p>';try{const [r,audit]=await Promise.all([sb.rpc('release_readiness_snapshot'),sb.rpc('system_audit_snapshot')]);if(r.error)throw r.error;if(audit.error)throw audit.error;const x=r.data||{},y=audit.data||{},checks=[...(x.checks||[]),...(y.checks||[])],metrics={...Object.fromEntries(Object.entries(x.metrics||{}).map(([k,v])=>['operations_'+k,v])),...Object.fromEntries(Object.entries(y.metrics||{}).map(([k,v])=>['audit_'+k,v]))};const statuses=[x.overall_status,y.overall_status],status=statuses.includes('fail')?'fail':statuses.includes('warning')?'warning':'ready',badge=status==='ready'?'ok':status==='warning'?'wait':'bad';summary.innerHTML=`<div class="card ${status==='ready'?'o':''}"><small>Overall status</small><b><span class="pill ${badge}">${esc(status.toUpperCase())}</span></b></div>`+Object.entries(metrics).map(([k,v])=>`<div class="card"><small>${esc(k.replace(/_/g,' '))}</small><b>${esc(String(v??'-'))}</b></div>`).join('');box.innerHTML=checks.map(c=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #f3f4f6"><span class="pill ${c.status==='pass'?'ok':c.status==='warning'?'wait':'bad'}">${esc(c.status)}</span><div><b>${esc(c.label)}</b><p class="sub" style="margin:3px 0 0">${esc(c.detail||'')}</p></div></div>`).join('')||'<p class="sub">No check details were returned.</p>';meta.textContent='Last checked '+new Date(y.generated_at||x.generated_at||Date.now()).toLocaleString();}catch(e){box.innerHTML=`<div class="warnbox">${esc(e.message||'Release checks failed. Apply the corrected migrations through 022 and try again.')}</div>`;summary.innerHTML='<div class="card"><small>Overall status</small><b>Unavailable</b></div>';}finally{box.setAttribute('aria-busy','false');button.disabled=false;button.textContent='Run checks';}};
@@ -661,7 +745,9 @@ async function start(){
       catch(err){toast(err.message,1);}finally{btn.disabled=false;}};
     refreshIdentity();
    }
-  if(view==='site'&&isAdmin)wireSite(M)}
+  if(view==='site'&&isAdmin)wireSite(M);
+  if(view==='media'&&can('media'))galleryManager(M);
+  if(view==='courses')wireCourses(M)}
  async function runBulkApplications(){
   const ids=[...selectedApps];if(!ids.length)return toast('Select at least one application.',1);
   if(ids.length>25)return toast('For safety, select no more than 25 applications per batch.',1);

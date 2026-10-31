@@ -43,6 +43,33 @@ begin
    where schemaname = 'public' and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL') and (qual = 'true' or with_check = 'true');
   if v is not null then problems := problems || ('Unconditional write policies: ' || v); end if;
 
+  -- Draft media must never acquire an anonymous/public retrieval path. Published site
+  -- assets remain a separate, deliberately public legacy delivery bucket.
+  if not exists (select 1 from storage.buckets where id = 'media-drafts' and public = false) then
+    problems := problems || 'media-drafts bucket is missing or publicly readable';
+  end if;
+  select string_agg(policyname, ', ' order by policyname) into v from pg_policies
+   where schemaname = 'storage' and tablename = 'objects' and policyname like 'media_draft_%'
+     and 'anon' = any(roles);
+  if v is not null then problems := problems || ('Anonymous policies exist on private media drafts: ' || v); end if;
+
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'site_settings' and policyname = 'ss_public_read'
+       and 'anon' = any(roles)
+       and qual like '%branding%' and qual like '%theme%' and qual like '%images%'
+       and qual like '%location%' and qual like '%gallery%'
+  ) then
+    problems := problems || 'Anonymous site_settings read policy is missing its explicit public-key allow-list';
+  end if;
+  if exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'site_settings' and policyname = 'ss_write'
+       and ('anon' = any(roles) or 'public' = any(roles))
+  ) then
+    problems := problems || 'site_settings write policy is exposed to anon/public instead of authenticated administrators only';
+  end if;
+
   if array_length(problems, 1) is not null then
     raise exception E'Security posture check found % problem(s):\n  - %', array_length(problems, 1), array_to_string(problems, E'\n  - ');
   end if;

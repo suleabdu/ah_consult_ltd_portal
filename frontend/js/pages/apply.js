@@ -9,7 +9,7 @@ window.addEventListener('unhandledrejection',function(e){
 });
 (function(){
  var c=window.APPLY_CONFIG;
- if(!window.supabase)return fatal('The Supabase library did not load (blocked by a Content-Security-Policy, ad blocker, or network). Check Netlify _headers allows https://cdn.jsdelivr.net.');
+ if(!window.supabase)return fatal('The bundled Supabase library did not load (blocked by a Content-Security-Policy, browser extension, or network). Confirm frontend/vendor/supabase.min.js is deployed.');
  if(!c)return fatal('js/config.js did not load or does not define window.APPLY_CONFIG. Confirm the file exists at frontend/js/config.js and the page path is correct.');
  if(!/^https:\/\/[a-z0-9]+\.supabase\.co$/.test(c.SUPABASE_URL||''))return fatal('SUPABASE_URL is not set correctly in js/config.js. It must look like https://abcdxyz.supabase.co (no trailing slash, no /rest/v1).');
  if(!c.SUPABASE_ANON_KEY||c.SUPABASE_ANON_KEY.indexOf('YOUR')===0)return fatal('SUPABASE_ANON_KEY is missing in js/config.js.');
@@ -72,7 +72,7 @@ function authView(mode='up'){view=$('#authForm');const up=mode==='up';let saved=
   idle(b);
   if(r.error){const m=r.error.message||'';return note(/invalid login/i.test(m)?'Email or password is incorrect.':/rate limit|too many/i.test(m)?'Too many attempts. Please wait a few minutes and try again.':/already registered|already been registered/i.test(m)?'This email already has an account. Use the Sign in tab.':/not confirmed/i.test(m)?'Please confirm your email first. Check your inbox for the verification link.':esc(m))}
   if(!up){try{if($('#rem')?.checked)localStorage.setItem('ahct_email',v('email'));else localStorage.removeItem('ahct_email')}catch(_){}}
-  if(!r.data.session){note('Account created, but this Supabase project still requires email confirmation. An administrator must disable Confirm Email in Supabase Auth settings to allow automatic login. Email verification is optional only when configured at the authentication provider.','i');return authView('in')}
+  if(!r.data.session){note('Account created. Check your inbox (and spam folder) for the confirmation link, then return here and sign in. If no message arrives, contact the training office.','i');return authView('in')}
   boot()};
  $('#go').onclick=submit;view.querySelectorAll('input:not([type=checkbox])').forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')submit()}))}
 function initHero(){const sl=[...document.querySelectorAll('#slides .slide')],dots=$('#dots');if(!sl.length)return;let i=0,t;
@@ -84,10 +84,11 @@ function initHero(){const sl=[...document.querySelectorAll('#slides .slide')],do
 /* MINIMAL APPLICATION FLOW: Programme -> Your information -> Review & pay -> Status */
 const DEBUG=new URLSearchParams(location.search).has('debug'),NEWAPP=new URLSearchParams(location.search).has('new'),RANK=['beginner','intermediate','advanced','professional'],rk=c=>{const i=RANK.indexOf(String(c).toLowerCase());return i<0?99:i};
 const cats=()=>[...new Set(S.courses.map(x=>x.category))].sort((a,b)=>rk(a)-rk(b)||a.localeCompare(b));
+const packageCats=()=>[...new Set(S.courses.filter(x=>x.in_full_package).map(x=>x.category))].sort((a,b)=>rk(a)-rk(b)||a.localeCompare(b));
 const picked=()=>S.courses.filter(x=>S.picked.has(x.code));
 const pkg=()=>S.w?.mode==='pkg'?S.pkgs[0]:null;
 const total=()=>pkg()?pkg().fee_ngn:picked().reduce((s,x)=>s+Number(x.fee_ngn||0),0);
-async function loadCatalog(){const [i,c,p]=await Promise.all([sb.from('intakes').select('*').eq('is_active',true),sb.from('courses').select('*').eq('is_active',true),sb.from('packages').select('*').eq('is_active',true)]);const now=Date.now();S.intakes=(i.data||[]).filter(x=>(!x.opens_at||now>=+new Date(x.opens_at))&&(!x.closes_at||now<=+new Date(x.closes_at))&&!(NEWAPP&&(S.myIntakes||[]).includes(x.id)));S.courses=c.data||[];S.pkgs=p.data||[];}
+async function loadCatalog(){const [i,c,p]=await Promise.all([sb.from('intakes').select('*').eq('is_active',true),sb.from('courses').select('*').eq('is_active',true).eq('workflow_status','published'),sb.from('packages').select('*').eq('is_active',true)]);const now=Date.now();S.intakes=(i.data||[]).filter(x=>(!x.opens_at||now>=+new Date(x.opens_at))&&(!x.closes_at||now<=+new Date(x.closes_at))&&!(NEWAPP&&(S.myIntakes||[]).includes(x.id)));S.courses=c.data||[];S.pkgs=p.data||[];}
 function flowKey(){return 'ahct_flow_'+(S.user?.id||'guest')}
 function readFlowState(){try{return JSON.parse(localStorage.getItem(flowKey())||'null')}catch(_){return null}}
 function saveFlowState(){if(!S.user||!S.w)return;try{localStorage.setItem(flowKey(),JSON.stringify({n:S.w.n,intake:S.w.intake,mode:S.w.mode,cat:S.w.cat,picked:[...S.picked],appId:S.app?.id||null}))}catch(e){console.warn('Could not save application progress locally:',e)}}
@@ -204,19 +205,19 @@ function progressHtml(current){
 function flowTitle(kicker,title,copy,n){return `${progressHtml(n)}<header class="stage-heading"><p class="eyebrow">${kicker}</p><h1>${title}</h1><p>${copy}</p></header>`}
 function courseSelectionValid(){
  if(!S.w)return false;
- if(S.w.mode==='pkg'){const categories=cats();return categories.length>0&&categories.every(c=>S.courses.some(x=>x.category===c&&S.picked.has(x.code)));}
+ if(S.w.mode==='pkg'){const categories=packageCats();return categories.length>0&&S.picked.size===categories.length&&categories.every(c=>S.courses.some(x=>x.in_full_package&&x.category===c&&S.picked.has(x.code)));}
  return S.w.mode==='cat'&&!!S.w.cat&&S.picked.size>0&&[...S.picked].every(code=>S.courses.some(x=>x.code===code&&x.category===S.w.cat));
 }
 function programmeChoicesHtml(){
  const categoryChoices=cats().map((c,i)=>`<label class="programme-choice ${S.w.cat===c&&S.w.mode==='cat'?'selected':''}" data-programme-choice="${esc(c)}"><input type="radio" name="programmePath" value="${esc(c)}" ${S.w.cat===c&&S.w.mode==='cat'?'checked':''}><span class="choice-copy"><strong>${esc(c)}</strong><small>${S.courses.filter(x=>x.category===c).length} course options</small></span><span class="choice-mark" aria-hidden="true"></span></label>`).join('');
- const p=S.pkgs[0];const packageChoice=p?`<label class="programme-choice package-choice ${S.w.mode==='pkg'?'selected':''}" data-programme-choice="__FULL__"><input type="radio" name="programmePath" value="__FULL__" ${S.w.mode==='pkg'?'checked':''}><span class="choice-copy"><strong>${esc(p.name)}</strong><small>Choose one course from each category</small></span><span class="choice-price">${naira(p.fee_ngn)}</span></label>`:'';
+ const p=S.pkgs[0];const packageChoice=p&&packageCats().length?`<label class="programme-choice package-choice ${S.w.mode==='pkg'?'selected':''}" data-programme-choice="__FULL__"><input type="radio" name="programmePath" value="__FULL__" ${S.w.mode==='pkg'?'checked':''}><span class="choice-copy"><strong>${esc(p.name)}</strong><small>Choose one course from each category</small></span><span class="choice-price">${naira(p.fee_ngn)}</span></label>`:'';
  return categoryChoices+packageChoice;
 }
 function renderCoursePicker(){
  const target=$('#coursePicker');if(!target)return;
  if(!S.w.mode){target.innerHTML='<div class="empty-hint">Choose a programme above to see the available courses.</div>';updateProgrammeSummary();return;}
- const list=S.w.mode==='pkg'?cats():[S.w.cat];
- target.innerHTML=list.filter(Boolean).map(c=>`${S.w.mode==='pkg'?`<div class="course-group-title">${esc(c)}</div>`:''}${S.courses.filter(x=>x.category===c).map(x=>`<label class="course-option ${S.picked.has(x.code)?'selected':''}"><input type="checkbox" value="${esc(x.code)}" ${S.picked.has(x.code)?'checked':''}><span class="course-copy"><strong>${esc(x.name)}</strong><small>${S.w.mode==='pkg'?'Included in package':esc(c)}</small></span><span class="course-price">${S.w.mode==='pkg'?'Included':naira(x.fee_ngn)}</span></label>`).join('')}`).join('')||'<div class="empty-hint">There are no courses available for this option. Please choose another category.</div>';
+ const list=S.w.mode==='pkg'?packageCats():[S.w.cat];
+ target.innerHTML=list.filter(Boolean).map(c=>`${S.w.mode==='pkg'?`<div class="course-group-title">${esc(c)}</div>`:''}${S.courses.filter(x=>x.category===c&&(S.w.mode!=='pkg'||x.in_full_package)).map(x=>`<label class="course-option ${S.picked.has(x.code)?'selected':''}"><input type="checkbox" value="${esc(x.code)}" ${S.picked.has(x.code)?'checked':''}><span class="course-copy"><strong>${esc(x.name)}</strong><small>${S.w.mode==='pkg'?'Included in package':esc(c)}</small></span><span class="course-price">${S.w.mode==='pkg'?'Included':naira(x.fee_ngn)}</span></label>`).join('')}`).join('')||'<div class="empty-hint">There are no courses available for this option. Please choose another category.</div>';
  target.querySelectorAll('input[type="checkbox"]').forEach(input=>input.addEventListener('change',()=>{
   const code=input.value,course=S.courses.find(x=>x.code===code);
   if(S.w.mode==='pkg'&&input.checked&&course){for(const old of [...S.picked]){const item=S.courses.find(x=>x.code===old);if(item&&item.category===course.category)S.picked.delete(old)}}
@@ -231,7 +232,7 @@ function updateProgrammeSummary(){
  if(count)count.textContent=`${S.picked.size} course${S.picked.size===1?'':'s'} selected`;
  if(sum)sum.textContent=naira(total());
  if(next)next.disabled=!courseSelectionValid()||!S.w.intake;
- if(hint){if(!S.w.mode)hint.textContent='Choose a programme to continue.';else if(S.w.mode==='pkg'&&!courseSelectionValid())hint.textContent='Choose one course under every category to continue.';else if(!courseSelectionValid())hint.textContent='Select at least one course to continue.';else hint.textContent='Your selection is ready. You can review everything before paying.';}
+ if(hint){if(!S.w.mode)hint.textContent='Choose a programme to continue.';else if(S.w.mode==='pkg'&&!courseSelectionValid())hint.textContent='Choose one Full Package-approved course under every available category to continue.';else if(!courseSelectionValid())hint.textContent='Select at least one course to continue.';else hint.textContent='Your selection is ready. You can review everything before paying.';}
  document.querySelectorAll('[data-programme-choice]').forEach(label=>{const inp=label.querySelector('input');label.classList.toggle('selected',!!inp&&inp.checked)});
 }
 async function renderProgrammeStage(){

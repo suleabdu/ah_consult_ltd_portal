@@ -34,7 +34,7 @@ The **database is the single source of truth**. The Google Sheet is a read-only 
 ### 0.3 Unzip the project
 Unzip `AHCT_SMS_HUB_Phase16.zip` to a folder such as `ahct-sms-hub`, then open a terminal **inside that folder**. All commands below run from there unless stated.
 
-**Checkpoint:** `python3 scripts/validate.py` prints `29 passed, 0 failed` (needs Python 3). If you don't have Python, skip this check.
+**Checkpoint:** `npm run validate` completes with no failures (needs Python 3). If you do not have Python, install it before continuing.
 
 ---
 
@@ -82,13 +82,13 @@ supabase link --project-ref YOUR_PROJECT_REF
 ```
 Enter the database password when asked.
 
-### 3.2 Apply all 25 migrations
+### 3.2 Apply every numbered migration
 ```bash
 supabase db push
 ```
-Type `Y` to confirm. This applies `001` through `025` in order.
+Type `Y` to confirm. This applies every numbered migration, in order, from `001` through the latest file committed in `supabase/migrations/`.
 
-> **No CLI?** In Supabase open **SQL Editor**, and for each file in `supabase/migrations/` from `001` to `025` **in numeric order**: open the file, paste it, click **Run**. Never skip or reorder files.
+> **No CLI?** In Supabase open **SQL Editor**, and for every file in `supabase/migrations/` **in numeric order**: open the file, paste it, click **Run**. Never skip or reorder files.
 
 ### 3.3 Prove the security rules are in place
 Open **SQL Editor**, paste the contents of `tests/sql/security_posture.sql`, click **Run**.
@@ -110,25 +110,23 @@ In **Table Editor** you will find ready-made data: **18 courses**, **1 intake**,
 
 ## Phase 4: Point the website at your project (10 minutes)
 
-> **Important:** `frontend/js/config.js` ships with the **original project's** URL and key. If you skip this phase, your website talks to the wrong database.
+> **Important:** `frontend/js/config.js` is intentionally inert in source control. Generate the public configuration only during a deployment or an isolated local preview; never commit the generated file.
 
-1. Open `frontend/js/config.js`.
-2. In the `PRODUCTION` block replace `SUPABASE_URL` and `SUPABASE_ANON_KEY` with **your** Project URL and **anon** key from Phase 2. Use the anon key only.
-3. Save, then:
+1. In a deployment environment, set `AHCT_SUPABASE_URL` and `AHCT_SUPABASE_ANON_KEY` to your Project URL and **anon** key from Phase 2. Use the anon key only.
+2. Run:
 ```bash
-git add frontend/js/config.js
-git commit -m "Point frontend at my Supabase project"
-git push
+AHCT_SUPABASE_URL=https://YOUR_PROJECT.supabase.co AHCT_SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_JWT npm run configure:frontend
 ```
+3. Do not commit the generated configuration. Set the same variables in Vercel for deployment builds.
 
-**Checkpoint:** `git diff HEAD~1 -- frontend/js/config.js` shows only those two values changed, and neither is the `service_role` key.
+**Checkpoint:** the command reports that it configured public anon credentials without printing them. It rejects privileged keys.
 
 ---
 
 ## Phase 5: Deploy the website on Vercel (10 minutes)
 
 1. In Vercel click **Add New, Project**, then import your GitHub repository.
-2. Set **Root Directory** to `frontend`. Set **Framework Preset** to **Other**. Leave **Build Command** and **Output Directory** empty.
+2. Keep **Root Directory** at the repository root. Set **Framework Preset** to **Other**, **Build Command** to `npm run configure:frontend`, and **Output Directory** to `frontend`. Add the two `AHCT_SUPABASE_*` build variables from Phase 4.
 3. Click **Deploy**.
 4. When it finishes, copy your site address, for example `https://ahct-sms-hub.vercel.app`. This is your **site origin** (no trailing slash).
 
@@ -144,7 +142,7 @@ In Supabase, **Authentication**, **URL Configuration**:
 1. **Site URL**: your site origin, e.g. `https://ahct-sms-hub.vercel.app`
 2. **Redirect URLs**: add `https://ahct-sms-hub.vercel.app/forgot-password` (and any custom domain).
 
-**Email delivery:** Supabase's built-in email sender allows only a few messages per hour. Before real students register, configure your own sender under **Authentication, SMTP Settings** (for example Resend).
+**Email delivery and confirmation:** Supabase's built-in email sender allows only a few messages per hour. Before real students register, configure your own sender under **Authentication, SMTP Settings** (for example Resend), then keep **Confirm Email** enabled under **Authentication, Providers, Email**. Test a registration and confirmation link on staging before production.
 
 **Checkpoint:** both fields are saved with no trailing slash on the site origin.
 
@@ -169,7 +167,7 @@ The Google Sheet values (`SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_B64`) come in Phase
 supabase secrets set --env-file ~/ahct-secrets.env
 ```
 
-### 7.3 Deploy all 13 functions
+### 7.3 Deploy all 17 functions
 Mac/Linux:
 ```bash
 ./scripts/deploy-functions.sh
@@ -184,7 +182,7 @@ The script deploys the three public functions (`admin-register`, `payment-webhoo
 ```bash
 ./scripts/check-setup.sh
 ```
-In Supabase, **Edge Functions** should list 13 functions.
+In Supabase, **Edge Functions** should list 17 functions.
 
 **Checkpoint:** every line says `OK` except possibly secrets you intentionally have not set yet.
 
@@ -314,7 +312,7 @@ Open your site's home page and confirm: the new design loads; there is **no** li
 ## Phase 12: Go-live checklist
 
 - [ ] CI is green on `main`.
-- [ ] `config.js` uses **your** project URL and **anon** key.
+- [ ] The deployment build has `AHCT_SUPABASE_URL` and `AHCT_SUPABASE_ANON_KEY`; the checked-in `config.js` remains inert.
 - [ ] `ALLOWED_ORIGINS` lists your real site origin(s); `ALLOW_LOCALHOST` is `false`.
 - [ ] `ADMIN_INVITE_CODE` secret is deleted.
 - [ ] Payment methods tested in sandbox, then switched to live keys.
@@ -324,12 +322,22 @@ Open your site's home page and confirm: the new design loads; there is **no** li
 - [ ] Supabase **Database, Backups** reviewed (daily backups are on paid plans; consider a plan that fits your data).
 - [ ] The service-role key, database password and service-account key are stored only in your password manager.
 - [ ] If any earlier copy of this project (or its old config files) was ever shared, you rotated the credentials listed in `SECURITY.md`.
+- [ ] Every required item in [the global panel-readiness control register](GLOBAL_PANEL_READINESS.md) has dated evidence and an accountable-owner sign-off.
 
 ---
 
 ## Phase 13: Test safely on your own computer (optional)
 
-By default, opening pages from your computer talks to your **live** project (a red ribbon warns you). Better: create a second Supabase project called `ahct-staging`, repeat Phases 2, 3 and 7 for it, then paste its URL and anon key into the `LOCAL` line in `frontend/js/config.js`. From then on local testing never touches live data.
+The checked-in browser configuration is intentionally inert, so opening the source locally does **not** connect to any project by default. For an interactive preview, create a separate `ahct-staging` project, repeat Phases 2, 3 and 7 there, and generate a temporary public configuration from staging values. Never paste project values into source or use production data for local testing.
+
+PowerShell example:
+```powershell
+$env:AHCT_STAGING_URL = 'https://YOUR_STAGING_PROJECT.supabase.co'
+$env:AHCT_STAGING_ANON_KEY = 'YOUR_STAGING_ANON_KEY'
+npm run configure:frontend
+```
+
+Do not commit the generated `frontend/js/config.js`; restore the inert template before creating a review commit.
 
 Run the site locally:
 ```bash

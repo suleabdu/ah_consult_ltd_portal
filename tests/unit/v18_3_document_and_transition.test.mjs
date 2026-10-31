@@ -12,7 +12,7 @@ const tests=[
  ['student document pages no longer build alternate letters',!doc.includes("Dear ${d.name")&&!doc.includes('d.body_text')],
  ['all academic RPCs have transition guard', ['portal_data','student_academic_record','published_student_results','portal_phase5_data'].every(x=>migration.includes('create or replace function public.'+x)) && (migration.match(/if not public\.student_portal_access\(\)/g)||[]).length>=4],
  ['document list actually renders admitted students',admin.includes('data-doc-student')&&admin.includes("D.apps.filter(a=>a.admission_decision==='approved'")],
- ['letterhead has file upload and private backend',admin.includes('id="letterheadUpload"')&&read('supabase/functions/document-branding/index.ts').includes('institution-letterheads')],
+ ['native document identity replaces A4 letterhead uploads',admin.includes('id="nativeName"')&&!admin.includes('id="letterheadUpload"')&&read('supabase/functions/document-branding/index.ts').includes('institution-document-logos')],
  ['PDF archived and hash verified on every download',pdf.includes(".from('issued-documents')")&&pdf.includes("doc.metadata.sha256!==actual")],
  ['public verification checks only hash, not full documents',read('supabase/functions/document-verify/index.ts').includes('sha256')],
  ['delete uses current admission, not stale document flag',migration.includes("if a.admission_decision='approved'")&&!migration.includes('An issued institutional document must be revoked')],
