@@ -1,6 +1,6 @@
 # AH Consult Ltd — Professional Services and Student Hub
 
-**Current source version:** V18.8.1  
+**Current source version:** V18.9
 **Review posture:** source-review candidate; not production-certified or presented as an authorized public demonstration.
 
 AH Consult Ltd combines a professional-services website with a distinct Student Hub for training, applications, learner access and staff workflows. The repository contains the static frontend, Supabase database migrations and Edge Functions, operational guidance, and automated quality checks that support those journeys.
@@ -10,7 +10,7 @@ AH Consult Ltd combines a professional-services website with a distinct Student 
 - A corporate public website for architecture, construction, interior design and consultancy.
 - A separate public Student Hub for course discovery, training applications, student access and staff access.
 - A governed Supabase platform for admissions, payments, academic records, student documents, role-based administration and a read-only Google Sheets reporting mirror.
-- Seventeen Supabase Edge Functions and forty-three ordered database migrations.
+- Nineteen Supabase Edge Functions and fifty ordered database migrations.
 - Unit, browser, SQL, security-posture and load-test starter coverage, with CI checks for secrets, static quality, Deno functions, SQL migrations and vendored assets.
 
 ## Repository guide
@@ -44,7 +44,7 @@ The architecture, decision records and trust boundaries are described in [Archit
 
 ## Current release and review materials
 
-The current source release separates the corporate website from the Student Hub while retaining all governed student and staff workflows. Read the [V18.8.1 deployment guide](docs/releases/DEPLOY_V18_8_1.md) before staging or deployment. Earlier release guides are indexed in [Release history](docs/releases/README.md).
+The current source release adds governed additional-course enrolment, native AH Consult stationery and consent-aware WhatsApp operations to the separate corporate website and Student Hub. Read the [V18.9 deployment guide](docs/releases/DEPLOY_V18_9.md) before staging or deployment. Earlier release guides are indexed in [Release history](docs/releases/README.md).
 
 The illustrative six-page document preview uses synthetic records and visible sample markings; it is not a production-issued document. See [the sample preview](docs/samples/AHCT_Native_Document_Illustrative_Preview.pdf) and the accompanying [sample notes](docs/samples/README.md).
 

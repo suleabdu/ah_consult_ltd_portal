@@ -1,8 +1,9 @@
-/** Native institutional identity profiles, V18.7.1. All actions require a valid staff JWT. */
+/** Native institutional identity profiles, including AH Consult vector stationery. All actions require a valid staff JWT. */
 import {admin, safe, json, corsHeaders, userFrom} from '../_shared/lib.ts';
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const allowedFields=['organisation_name','organisation_tagline','postal_address','phone','email','website','header_alignment'] as const;
+const allowedFields=['organisation_name','organisation_tagline','postal_address','phone','email','website','header_alignment','stationery_style'] as const;
+const STATIONERY_STYLES=new Set(['native','ah_consult_diagonal']);
 const textField=(v:unknown,max:number):string=>{
  if(typeof v!=='string') throw Error('Invalid identity field');
  const str=v.trim();
@@ -11,7 +12,8 @@ const textField=(v:unknown,max:number):string=>{
 };
 const visible=(p:any)=>({id:p.id,label:p.label,status:p.status,is_default:p.is_default,revision:p.revision,
  organisation_name:p.organisation_name,organisation_tagline:p.organisation_tagline,postal_address:p.postal_address,
- phone:p.phone,email:p.email,website:p.website,header_alignment:p.header_alignment,has_logo:!!p.logo_path,
+ phone:p.phone,email:p.email,website:p.website,header_alignment:p.header_alignment,
+ stationery_style:p.stationery_style||'ah_consult_diagonal',has_logo:!!p.logo_path,
  updated_at:p.updated_at});
 const failure=(message:string,status=422)=>json({error:message},status);
 const parseId=(v:unknown)=>typeof v==='string'&&UUID.test(v)?v:null;
@@ -88,11 +90,12 @@ Deno.serve(safe(async(req)=>{
  const profileId=parseId(input.profile_id);
  if(action==='save'){
   const raw:any={};
-  for(const f of allowedFields)raw[f]=textField(input[f],({organisation_name:130,organisation_tagline:150,
-   postal_address:300,phone:80,email:150,website:250,header_alignment:12} as any)[f]);
+  for(const f of allowedFields)raw[f]=textField(f==='stationery_style'?(input[f]??'ah_consult_diagonal'):input[f],({organisation_name:130,organisation_tagline:150,
+   postal_address:300,phone:80,email:150,website:250,header_alignment:12,stationery_style:32} as any)[f]);
   raw.label=textField(input.label||'Document identity',100);
   if(raw.label.length<2||raw.organisation_name.length<3)return failure('Enter an identity label and official institution name.');
   if(!['left','center'].includes(raw.header_alignment))return failure('Choose left or center alignment.');
+  if(!STATIONERY_STYLES.has(raw.stationery_style))return failure('Choose an approved native stationery style.');
   if(raw.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.email))return failure('Enter a valid email.');
   if(raw.website){let url:URL;try{url=new URL(raw.website)}catch{return failure('Enter an HTTPS website URL.');}
    if(url.protocol!=='https:')return failure('Official website must use HTTPS.');}

@@ -1,3 +1,14 @@
+## V18.9 — Governed enrolment, native stationery and WhatsApp operations (1 November 2026)
+
+- Grouped Student, Tutor and Admin portal navigation around related responsibilities, with keyboard-reachable collapsible headings, dropdown chevrons, active-section visibility and responsive layouts.
+- Added a server-governed additional-course workflow: student selection, payment claim, Finance verification, independent Academic/Registrar approval, receipt evidence, total reconciliation and versioned revised admission letter.
+- Added an authenticated additional-course eligibility check so the Courses screen reflects the current intake directly from the database rather than an obsolete portal payload field.
+- Prevented a new-intake application until the active programme has reached its duration, all results are reviewed/published and a statement has been issued; students who are still active are guided to the additional-course route.
+- Added AH Consult diagonal vector stationery, a subdued watermark and controlled contact footer for future official PDF documents; historic issued documents remain immutable.
+- Added consent-backed WhatsApp contact capture, encrypted Meta Cloud API settings, masked opt-in campaigns, signed inbound webhook processing, 24-hour chatbot guidance, opt-out handling and human handoff queues.
+- Locked delivery to the Meta WhatsApp Cloud API through migration 049; the previous generic outbound webhook route is not available.
+- Added release guidance and source-level regression checks. Staging, provider, accessibility and operational-owner approval remain required before production use.
+
 ## V18.8.1 — Corporate website and AH Student Hub separation (31 October 2026)
 
 - Created a focused AH Consult corporate homepage and dedicated AH Student Hub public homepage. Corporate home immediately presents **Professional Services** versus **AH Student Hub** as two distinct visitor journeys.

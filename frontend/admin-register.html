@@ -14,11 +14,12 @@
 <section class="side"><div class="box"><div id="m"></div><div id="regView"><h2>Request staff access</h2><p class="sub">This page is for authorised AH Consult staff only. You need the staff access code from management. Your account stays inactive until an administrator approves it.</p>
 <form id="f" novalidate><label for="fn">Full name</label><input id="fn" autocomplete="name"><div class="err" id="e_fn"></div>
 <label for="em">Work email</label><input id="em" type="email" autocomplete="email"><div class="err" id="e_em"></div>
-<label for="ph">Phone</label><input id="ph" inputmode="tel" autocomplete="tel" placeholder="08012345678"><div class="err" id="e_ph"></div>
+<label for="ph">WhatsApp number</label><input id="ph" inputmode="tel" autocomplete="tel" placeholder="08012345678" aria-describedby="whatsappHelp"><p class="sub" id="whatsappHelp">Required for secure staff invitations, account notices and support routing. Use a number that can receive WhatsApp.</p><div class="err" id="e_ph"></div>
 <label for="po">Position</label><select id="po"><option value="">Select</option><option>Administrator</option><option>Registrar / Admissions</option><option>Finance / Accounts</option><option>Academic Coordinator</option><option>Operations</option><option>Tutor / Lecturer</option><option>Other</option></select><div class="err" id="e_po"></div>
 <label for="pw">Password</label><div class="pw"><input id="pw" type="password" autocomplete="new-password" placeholder="At least 10 characters"><button type="button" data-toggle-password="#pw">Show</button></div><div class="meter"><i id="mt"></i></div><div class="err" id="e_pw"></div>
 <label for="pw2">Confirm password</label><input id="pw2" type="password" autocomplete="new-password"><div class="err" id="e_pw2"></div>
 <label for="ic">Staff access code</label><input id="ic" type="password" autocomplete="off"><div class="err" id="e_ic"></div>
+<div class="row"><label><input type="checkbox" id="wa"> I agree that AH Consult may use this WhatsApp number for staff invitations and service notices.</label></div><div class="err" id="e_wa"></div>
 <div class="row"><label><input type="checkbox" id="ag"> I understand my activity on this system is logged.</label></div><div class="err" id="e_ag"></div>
 <button id="go" type="submit">Submit registration</button></form>
 <div class="note">Already approved? <a href="staff-login.html">Sign in</a></div></div>

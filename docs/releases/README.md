@@ -4,6 +4,7 @@ Release and deployment records are kept together so that the repository root rem
 
 ## Current source release
 
+- [V18.9 — Governed enrolment, native stationery and WhatsApp operations](DEPLOY_V18_9.md)
 - [V18.8.1 — Corporate website and Student Hub separation](DEPLOY_V18_8_1.md)
 
 ## V18.7 releases

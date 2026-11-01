@@ -59,11 +59,38 @@
     root.innerHTML = '<header class="top"><button id="burger" type="button" aria-label="Open menu">☰</button><img class="lg" alt="" src="https://lh3.googleusercontent.com/d/1Qp_nbC6oekgdzjJqGBHwHw125t1ABYUf" onerror="this.style.display=\'none\'"><span class="org" data-org>AH Consult</span><span class="sp"></span><span class="me">' + esc(o.who) + '</span><a href="/" style="color:#fdba74;text-decoration:none;font-size:12.5px;font-weight:700">Website</a><button id="so" type="button" class="top-signout">Sign out</button></header>' +
       '<div class="shell"><nav id="nav"></nav><main id="main"></main></div><footer>&copy; ' + new Date().getFullYear() + " AH Consult Ltd &middot; " + esc(o.footer || "") + "</footer>";
     var nav = document.getElementById("nav"), main = document.getElementById("main");
-    function paintNav() { nav.innerHTML = '<div class="cap">' + esc(o.cap) + "</div>" + o.nav().map(function (n) { return '<button data-v="' + n[0] + '" class="' + (n[0] === cur ? "act" : "") + '">' + n[2] + " " + esc(n[1]) + (n[3] ? '<span class="b">' + n[3] + "</span>" : "") + "</button>"; }).join(""); nav.querySelectorAll("button").forEach(function (b) { b.onclick = function () { go(b.dataset.v); nav.classList.remove("open"); }; }); }
-    function go(id) { var ok = o.nav().some(function (n) { return n[0] === id; }); cur = ok ? id : o.nav()[0][0]; paintNav(); main.innerHTML = o.render(cur); o.wire(cur, main); window.scrollTo(0, 0); }
+    // Pages can return the legacy flat list, or grouped entries in the form
+    // { label: "Learning", items: [[id, label, icon, badge], ...] }. Keeping
+    // the flat-list path makes this navigation upgrade non-breaking for pages
+    // that have not yet adopted contextual groups.
+    var collapsedGroups = Object.create(null);
+    function navGroups() {
+      var entries = o.nav() || [];
+      if (!entries.length || Array.isArray(entries[0])) return [{ key: "legacy", label: "", items: entries }];
+      return entries.map(function (group, index) { return { key: "group-" + index, label: group.label || "", items: Array.isArray(group.items) ? group.items : [] }; }).filter(function (group) { return group.items.length; });
+    }
+    function navItems() { return navGroups().reduce(function (all, group) { return all.concat(group.items); }, []); }
+    function navButton(n) { return '<button data-v="' + n[0] + '" class="' + (n[0] === cur ? "act" : "") + '">' + (n[2] || "") + " " + esc(n[1]) + (n[3] ? '<span class="b">' + n[3] + "</span>" : "") + "</button>"; }
+    function expandActiveGroup(groups) {
+      groups.forEach(function (group) {
+        if (group.items.some(function (item) { return item[0] === cur; })) collapsedGroups[group.key] = false;
+      });
+    }
+    function paintNav(keepActiveVisible) {
+      var groups = navGroups();
+      if (keepActiveVisible) expandActiveGroup(groups);
+      nav.innerHTML = '<div class="cap">' + esc(o.cap) + "</div>" + groups.map(function (group, i) {
+        var groupId = "nav-group-" + i, isCollapsed = group.label && collapsedGroups[group.key] === true;
+        var title = group.label ? '<h2 class="nav-group-title"><button class="nav-group-toggle" type="button" id="' + groupId + '" data-group="' + group.key + '" aria-controls="' + groupId + '-items" aria-expanded="' + (!isCollapsed) + '"><span>' + esc(group.label) + '</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></button></h2>' : "";
+        return '<section class="nav-group' + (isCollapsed ? ' is-collapsed' : '') + '"' + (group.label ? ' aria-labelledby="' + groupId + '"' : "") + ">" + title + '<div class="nav-group-items" id="' + groupId + '-items"' + (isCollapsed ? ' hidden' : '') + ">" + group.items.map(navButton).join("") + "</div></section>";
+      }).join("");
+      nav.querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { go(b.dataset.v); nav.classList.remove("open"); }; });
+      nav.querySelectorAll(".nav-group-toggle").forEach(function (b) { b.onclick = function () { collapsedGroups[b.dataset.group] = b.getAttribute("aria-expanded") === "true"; paintNav(false); }; });
+    }
+    function go(id) { var entries = navItems(), ok = entries.some(function (n) { return n[0] === id; }); cur = ok ? id : (entries[0] ? entries[0][0] : o.start); paintNav(true); main.innerHTML = o.render(cur); o.wire(cur, main); window.scrollTo(0, 0); }
     document.getElementById("burger").onclick = function () { nav.classList.toggle("open"); };
     document.getElementById("so").onclick = function () { o.signOut(); };
-    window.PCgo = go; paintNav(); main.innerHTML = o.render(cur); o.wire(cur, main);
+    window.PCgo = go; paintNav(true); main.innerHTML = o.render(cur); o.wire(cur, main);
     return { go: go, refresh: function () { go(cur); } };
   }
   window.PC = { esc: esc, naira: naira, day: day, dt: dt, toast: toast, modal: modal, boot: boot, shell: shell, band: BANDS, bandPill: bandPill };

@@ -28,6 +28,7 @@ type Draw = {
 type InstitutionIdentity = {
   organisation_name: string; organisation_tagline: string; postal_address: string;
   phone: string; email: string; website: string; header_alignment: "left" | "center";
+  stationery_style?: "native" | "ah_consult_diagonal";
   revision: number; logo_path?: string | null; logo_mime?: string | null;
 };
 function makeDraw(pdf: PDFDocument, regular: any, bold: any, identity: InstitutionIdentity, logo: any = null): Draw {
@@ -38,10 +39,36 @@ function makeDraw(pdf: PDFDocument, regular: any, bold: any, identity: Instituti
   const contentFloor = footerBaseline + 69;
   let page = pdf.addPage([width, height]);
   let y = height - 150;
+  // AH Consult's approved stationery is intentionally vector-native: it scales
+  // cleanly, remains accessible to the renderer, and does not turn a full-page
+  // scanned letterhead into an ungoverned document background.
+  const useAhConsultStationery = identity.stationery_style !== "native";
+  const drawStationery = (target: any) => {
+    if (!useAhConsultStationery) return;
+    // The two restrained diagonal bands echo the approved stationery without
+    // entering the logo or content-safe areas. Lines are clipped by the A4 page.
+    target.drawLine({ start: { x: width - 176, y: height + 6 }, end: { x: width + 8, y: height - 86 }, thickness: 19, color: INK });
+    target.drawLine({ start: { x: width - 137, y: height + 6 }, end: { x: width + 8, y: height - 66 }, thickness: 9, color: ORANGE });
+    target.drawLine({ start: { x: -8, y: 16 }, end: { x: 139, y: -57 }, thickness: 17, color: INK });
+    target.drawLine({ start: { x: -8, y: -4 }, end: { x: 115, y: -65 }, thickness: 8, color: ORANGE });
+    // A deliberately faint watermark sits beneath document content. It carries
+    // no data, so it never obscures grades, amounts, or issued-document text.
+    if (logo) {
+      const ratio = Math.min(170 / logo.width, 170 / logo.height);
+      const w = logo.width * ratio, h = logo.height * ratio;
+      target.drawImage(logo, { x: (width - w) / 2, y: (height - h) / 2 - 22, width: w, height: h, opacity: 0.035 });
+    } else {
+      const mark = "AH", size = 132;
+      target.drawText(mark, { x: (width - bold.widthOfTextAtSize(mark, size)) / 2, y: height / 2 - 38, size, font: bold, color: INK, opacity: 0.035 });
+    }
+    const watermark = "AH CONSULT";
+    target.drawText(watermark, { x: (width - regular.widthOfTextAtSize(watermark, 18)) / 2, y: height / 2 - 77, size: 18, font: regular, color: INK, opacity: 0.028 });
+  };
 
   // The masthead is vector text, a small optional logo, and a rule — never an A4 background image.
   // It is drawn on EVERY page. No user-set letterhead margin is required.
   const drawMasthead = (target: any): number => {
+    drawStationery(target);
     const centered = identity.header_alignment === "center";
     const top = height - 42;
     const company = textSafe(identity.organisation_name).slice(0, 105);
@@ -224,6 +251,28 @@ function makeDraw(pdf: PDFDocument, regular: any, bold: any, identity: Instituti
       for (const target of pdf.getPages()) {
         const ruleY = footerBaseline + 55;
         target.drawLine({ start: { x: margin, y: ruleY }, end: { x: width - margin, y: ruleY }, thickness: 0.5, color: LINE });
+        if (useAhConsultStationery) {
+          // The source stationery's lower contact block, rebuilt from approved
+          // identity fields rather than hard-coded or image-baked contact data.
+          const address = String(identity.postal_address || "").trim();
+          const contacts = [identity.phone, identity.email].filter(v => String(v || "").trim()).map(textSafe).join("  |  ");
+          const leftWidth = 264, rightWidth = 205;
+          const leftText = (value: string, baseline: number, size: number) => {
+            const line = draw.wrap(value, size, regular, leftWidth)[0];
+            if (line) target.drawText(line, { x: margin, y: baseline, size, font: regular, color: MUTED });
+          };
+          const rightFooter = (value: string, baseline: number, size: number, font: any = regular) => {
+            const line = draw.wrap(value, size, font, rightWidth)[0] || "-";
+            target.drawText(line, { x: width - margin - font.widthOfTextAtSize(line, size), y: baseline, size, font, color: MUTED });
+          };
+          if (address) leftText(address, footerBaseline + 43, 6.8);
+          if (contacts) leftText(contacts, footerBaseline + 31, 7);
+          const customLine = String(custom || "").trim();
+          if (customLine) rightFooter(customLine, footerBaseline + 43, 7.2);
+          rightFooter(web, footerBaseline + 30, 7.5);
+          rightFooter(`${docName}  |  Document ID: ${footId}`, footerBaseline + 18, 7);
+          continue;
+        }
         if (custom.trim()) {
           const lines = draw.wrap(custom, 7.5, regular, contentWidth);
           // Two restrained lines for the administrator-authored contact text.
@@ -274,12 +323,17 @@ Deno.serve(safe(async (req) => {
   if(!preview&&!internal&&doc.user_id!==user!.id&&(!staffCanView||
     (staffAccess?.role==='finance'&&doc.document_type!=='payment_receipt')))
     return json({error:'Document access denied'},403);
-  const isQueuedReceipt=doc.document_type==="payment_receipt" && /^payment_receipt:[0-9a-f-]{36}$/i.test(String(doc.document_key||""));
+  const rawDocumentKey=String(doc.document_key||"");
+  const isQueuedReceipt=doc.document_type==="payment_receipt" && /^payment_receipt:[0-9a-f-]{36}$/i.test(rawDocumentKey);
+  // Course-addition approval issues a distinct, auditable admission update. It
+  // deliberately uses a namespaced key so it cannot overwrite the original
+  // admission letter, but it renders through the approved admission template.
+  const isAdmissionUpdate=doc.document_type==="admission_letter" && /^admission_update:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawDocumentKey);
   if (doc.status !== "available" && !(isQueuedReceipt&&doc.status==="pending")) return json({ error: "This document has not been issued for download yet." }, 409);
   // The authoritative type must come from the server-issued record, never from the request body.
-  const key = isQueuedReceipt ? "payment_receipt" : String(doc.document_key || "");
+  const key = isQueuedReceipt ? "payment_receipt" : isAdmissionUpdate ? "admission_letter" : rawDocumentKey;
   if (!key) return json({ error: "This issued document has no document type. Please contact the office to correct the record." }, 409);
-  if (requestedKey && requestedKey !== key) return json({ error: "The requested document does not match the issued document." }, 400);
+  if (requestedKey && requestedKey !== key && requestedKey !== rawDocumentKey) return json({ error: "The requested document does not match the issued document." }, 400);
   if (!doc.application_id && !doc.metadata?.pdf_path) return json({ error: "This document is not linked to an application record." }, 409);
 
   const allowed = new Set(["admission_letter", "payment_receipt", "academic_transcript", "result_statement", "deferment_letter", "certificate"]);
@@ -415,7 +469,7 @@ Deno.serve(safe(async (req) => {
   if (!preview && key === "certificate" && !(doc.document_key === "certificate" && doc.status === "available")) return json({ error: "A certificate must be formally issued before download." }, 403);
 
   const pdf = await PDFDocument.create();
-  pdf.setTitle(`${doc.title || key} - AH Consult Ltd`);
+  pdf.setTitle(`${isAdmissionUpdate?'Revised Admission Letter':(doc.title || key)} - AH Consult Ltd`);
   pdf.setAuthor("AH Consult Ltd");
   pdf.setCreator("AH Student Hub");
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
@@ -464,7 +518,7 @@ Deno.serve(safe(async (req) => {
     || verifiedProviderData.paidOn || verifiedProviderData.paidAt);
   const providerCurrency = safeProviderField(verifiedProviderData.currency);
   const presentation: Record<string, string> = {
-    admission_letter: "Admission Letter",
+    admission_letter: isAdmissionUpdate ? "Revised Admission Letter" : "Admission Letter",
     deferment_letter: "Deferment Approval Letter",
     payment_receipt: manualReceipt ? "Manual Payment Receipt" : "Electronic Payment Receipt",
     academic_transcript: "Academic Transcript",
@@ -485,6 +539,11 @@ Deno.serve(safe(async (req) => {
     d.paragraph(stripDocumentSubject(interpolate(template?.body_text)) || "We are pleased to confirm that your application for admission to AH Consult Ltd has been approved. Please retain this letter as part of your official training records.");
     d.write("ADMISSION DETAILS", 10, { bold: true, color: ORANGE }); d.y -= 7;
     d.row("Student name", name); d.row("Student ID", studentId); d.row("Training intake", intakeLabel); d.row("Programme / courses", program); d.row("Admission status", "Approved");
+    if (isAdmissionUpdate) {
+      d.row("Admission update", "An additional course has been payment-confirmed and approved for this intake");
+      d.y -= 7;
+      d.paragraph("This revised admission record reflects your current approved course enrolment. Your original admission letter remains preserved as the historic record.", 9.5);
+    }
     d.y -= 16;
     if(!template?.body_text)d.paragraph("Please follow the instructions provided by the training office regarding orientation, class schedules and any outstanding enrolment requirements.");
     d.y -= 14;

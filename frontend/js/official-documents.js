@@ -1,9 +1,13 @@
 /* One authenticated PDF route for Application and Student portals. No separate HTML document pages. */
 (function(g){'use strict';
  const keys=new Set(['admission_letter','payment_receipt','academic_transcript','result_statement','deferment_letter','certificate']);
- const normalKey=doc=>doc.document_type==='payment_receipt'?'payment_receipt':doc.document_key;
+ const isAdmissionUpdate=doc=>doc?.document_type==='admission_letter'&&/^admission_update:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(doc?.document_key||''));
+ // An approved additional course has its own immutable record, but intentionally
+ // renders with the governed admission-letter template instead of a free-form key.
+ const normalKey=doc=>doc.document_type==='payment_receipt'?'payment_receipt':isAdmissionUpdate(doc)?'admission_letter':doc.document_key;
  const cache=new Map(), MAX_PDF_CACHE=3, MAX_CACHE_BYTES=5*1024*1024;
  const title=key=>({admission_letter:'Admission Letter',payment_receipt:'Official Payment Receipt',academic_transcript:'Academic Transcript',result_statement:'Result Statement',deferment_letter:'Deferment Letter',certificate:'Certificate of Completion'})[key]||'Official Document';
+ const displayTitle=doc=>isAdmissionUpdate(doc)?'Revised Admission Letter':title(normalKey(doc));
  // Keep only a few already verified PDFs in memory, scoped to the signed-in user.
  // A cached copy is never persisted to browser storage; SHA-256 revision identifies the bytes.
  async function pdf(sb,config,record,currentStyle=false){
@@ -43,11 +47,11 @@
    const overlay=document.createElement('div');overlay.className='official-document-preview';
    overlay.setAttribute('role','presentation');
    overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.73);z-index:10000;padding:12px;display:flex;align-items:center;justify-content:center';
-   const panel=document.createElement('div');panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',title(normalKey(record))+' PDF preview');
+   const panel=document.createElement('div');panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',displayTitle(record)+' PDF preview');
    panel.style.cssText='background:white;width:min(960px,100%);height:min(93vh,960px);display:flex;flex-direction:column;border-radius:12px;padding:12px;gap:8px;box-sizing:border-box';
-   const heading=document.createElement('h2');heading.textContent=title(normalKey(record));heading.style.cssText='font-size:17px;line-height:1.3;margin:0';
+   const heading=document.createElement('h2');heading.textContent=displayTitle(record);heading.style.cssText='font-size:17px;line-height:1.3;margin:0';
    const close=document.createElement('button');close.type='button';close.textContent='Close preview';close.setAttribute('aria-label','Close PDF preview');close.style.cssText='align-self:flex-end;padding:7px 12px;border:1px solid #cbd5e1;background:#ffffff;color:#111827!important;border-radius:6px;cursor:pointer;font-weight:700';
-   const iframe=document.createElement('iframe');iframe.src=url;iframe.title=title(normalKey(record));iframe.style.cssText='border:1px solid #e5e7eb;width:100%;flex:1;min-height:0';
+   const iframe=document.createElement('iframe');iframe.src=url;iframe.title=displayTitle(record);iframe.style.cssText='border:1px solid #e5e7eb;width:100%;flex:1;min-height:0';
    const onKey=e=>{if(e.key==='Escape'){e.preventDefault();cleanup();}};
    const cleanup=()=>{document.removeEventListener('keydown',onKey);URL.revokeObjectURL(url);overlay.remove();lastFocus?.focus?.();};
    close.addEventListener('click',cleanup);overlay.addEventListener('click',e=>{if(e.target===overlay)cleanup();});document.addEventListener('keydown',onKey);
@@ -81,7 +85,7 @@
   for(const doc of docs){
    const row=document.createElement('div');row.className='official-document-row';row.style.cssText='display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-top:1px solid #e5e7eb;padding:12px 0';
    const info=document.createElement('div'),strong=document.createElement('strong'),meta=document.createElement('small');
-   strong.textContent=title(normalKey(doc));meta.style.cssText='display:block;color:#6b7280;margin-top:4px';
+   strong.textContent=displayTitle(doc);meta.style.cssText='display:block;color:#6b7280;margin-top:4px';
    meta.textContent=(doc.status==='available'?'Issued '+(doc.issued_at?new Date(doc.issued_at).toLocaleDateString('en-GB'):'—'):normalKey(doc)==='payment_receipt'?'Verified payment · preparing receipt PDF':'Official document being prepared')+(doc.metadata?.payment_reference?' · '+doc.metadata.payment_reference:'');
    info.append(strong,meta);
    const payment=options.receiptsOnly?(options.payments||[]).find(p=>String(p.id)===String(doc.metadata?.payment_id)):null;
@@ -113,5 +117,5 @@
   }
   return docs;
  }
- g.AHOfficialDocuments=Object.freeze({normalKey,title,action,renderList,fetchRecords,warmOnIntent});
+ g.AHOfficialDocuments=Object.freeze({normalKey,title,displayTitle,action,renderList,fetchRecords,warmOnIntent});
 })(window);

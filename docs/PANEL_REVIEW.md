@@ -2,7 +2,7 @@
 
 ## Scope and status
 
-This package is a source-review candidate for AH Consult Ltd V18.8.1. It is intended to support technical and operational review of the corporate website, Student Hub and governed Supabase platform. It is not evidence of a production deployment, penetration-test certification, accreditation or authorization to publish a public demonstration.
+This package is a source-review candidate for AH Consult Ltd V18.9. It is intended to support technical and operational review of the corporate website, Student Hub and governed Supabase platform. It is not evidence of a production deployment, penetration-test certification, accreditation or authorization to publish a public demonstration.
 
 ## Suggested evidence route
 
@@ -13,8 +13,10 @@ This package is a source-review candidate for AH Consult Ltd V18.8.1. It is inte
 | Global release and ISMS controls | [Global panel readiness control register](GLOBAL_PANEL_READINESS.md) and [security exception register](SECURITY_EXCEPTIONS.md) |
 | Database controls and migration sequence | `supabase/migrations/`, `tests/sql/` and [Architecture](ARCHITECTURE.md) |
 | Browser journeys and accessibility-minded controls | `frontend/`, `tests/browser/` and `tests/unit/` |
+| Student progression and additional-course governance | `047_student_progression_and_course_addition_control.sql`, `tests/unit/v19_progression_and_whatsapp.test.mjs` and the [V18.9 deployment guide](releases/DEPLOY_V18_9.md) |
 | Official-document governance | [Document issuance policy](DOCUMENT_ISSUANCE_POLICY.md), [Native Document Studio](NATIVE_DOCUMENT_STUDIO.md) and [synthetic previews](samples/README.md) |
-| Current staging/deployment scope | [V18.8.1 deployment guide](releases/DEPLOY_V18_8_1.md) |
+| WhatsApp consent, campaigns and chatbot controls | [WhatsApp operations runbook](WHATSAPP_OPERATIONS.md), migrations `048`–`049` and the signed `whatsapp-webhook` Edge Function |
+| Current staging/deployment scope | [V18.9 deployment guide](releases/DEPLOY_V18_9.md) |
 | Earlier decisions and release history | [Release history](releases/README.md) and [archived reports](archive/) |
 
 ## Reproducible checks

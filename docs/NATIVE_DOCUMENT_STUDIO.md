@@ -5,9 +5,9 @@ The old full-page stationery upload and 59.6 mm image-overlap calibration UI are
 
 ## Authoritative institutional identity
 
-The administrator uses **Document Designer → Institutional PDF identity** to set the legal organization name, tagline, official postal address, phone, email, HTTPS website and masthead alignment. A small PNG/JPEG corporate logo (max 1 MB) is optional; without one the engine renders an AH monogram. Only approved administrators can edit this profile or read the private logo through the `document-branding` Edge Function. The underlying identity table and storage bucket deny direct anon/authenticated access; the Edge Function uses its private service-role connection.
+The administrator uses **Document Designer → Institutional PDF identity** to set the legal organization name, tagline, official postal address, phone, email, HTTPS website, masthead alignment and stationery treatment. The default **AH Consult diagonal stationery** recreates the approved layout with vector-native charcoal/orange diagonal bands, a restrained central watermark and a contact-led footer. It uses the approved identity fields, not the address or contacts baked into a supplied sample image. A small PNG/JPEG corporate logo (max 1 MB) is optional; without one the engine renders an AH monogram. Only approved administrators can edit this profile or read the private logo through the `document-branding` Edge Function. The underlying identity table and storage bucket deny direct anon/authenticated access; the Edge Function uses its private service-role connection.
 
-The new system refuses *new official PDF issuance* until the institution has saved a profile including its official address and at least one phone/email contact. This is intentional; configure the profile before processing pending receipts. Administrators can still generate clearly marked sample previews. Do not enter a fabricated address. The previous `institution_document_branding`, `institution_letterhead_versions` and `institution-letterheads` remain untouched solely for historical data and rollback; new generator code does not read them.
+The new system refuses *new official PDF issuance* until the institution has saved a profile including its official address and at least one phone/email contact. This is intentional; configure the profile before processing pending receipts. Administrators can still generate clearly marked sample previews. Do not enter a fabricated address. The previous `institution_document_branding`, `institution_letterhead_versions` and `institution-letterheads` remain untouched solely for historical data and rollback; new generator code does not read them. The renderer will never accept a full-page raster letterhead as a document background.
 
 ## Body / signatory editor
 
@@ -21,13 +21,13 @@ Certificate issuance remains blocked until AHCT formally approves a versioned pr
 
 ## Rollout / staging verification
 
-1. Back up staging. Apply migration `040_native_document_studio_governed_issuance.sql` **after migration 039**. Do not edit applied migrations. 
+1. Back up staging. Apply pending migrations through `046_ah_consult_native_stationery.sql` (starting with `040_native_document_studio_governed_issuance.sql` after migration 039). Do not edit applied migrations.
 2. Redeploy the `document-branding` and `student-document` functions and the updated frontend admin bundle.
-3. Log in as an approved admin, enter actual corporate identity and contact details, then save and upload only the approved logo (optional). Do **not** upload an A4 letterhead.
+3. Log in as an approved admin, enter actual corporate identity and contact details, choose **AH Consult diagonal stationery**, then save and upload only the approved logo (optional). Do **not** upload an A4 letterhead; the design is recreated securely in PDF vectors.
 4. Preview all six tabs using the sample/NOT ISSUED route. Inspect both masthead alignments and print at A4 Actual Size.
 5. Test manual and online payment confirmations with verified ledgers; the receipt worker may fail until institutional identity setup is complete.
 6. Test academic reviewer and separate registrar accounts, a missing grade, an unpublished grade, a grade edit invalidating sign-off, unauthorized staff issuance, unauthorized student document access, and immutable historic archives.
-7. Test the campus production logo and address: this source package contains no approved company logo or verified postal address.
+7. Confirm the published identity against the authorized corporate register. The new-identity form is prefilled from the supplied AH Consult letterhead reference, but an approved administrator must review and publish the definitive logo, address and contact details before any official documents are issued.
 
 ### Important limitations
 

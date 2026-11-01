@@ -24,6 +24,26 @@ Deno.serve(safe(async (req) => {
   if (!effectiveIntakeId || !Array.isArray(courseCodes) || !courseCodes.length) return json({ error: "Choose an intake and at least one course." }, 400);
   if (draft && draft.intake_id !== effectiveIntakeId) return json({ error: "The intake cannot be changed after the application has started." }, 400);
 
+  // A previous approved programme must be complete before this endpoint can
+  // reserve a payment for another intake. Existing drafts remain resumable;
+  // the completion policy applies only when a new application would be made.
+  if (!draft) {
+    const { data: existing, error: existingError } = await db.from("applications").select("*")
+      .eq("user_id", user.id).eq("intake_id", effectiveIntakeId).not("status", "in", "(expired,rejected)").maybeSingle();
+    if (existingError) return json({ error: "Your existing application could not be checked. Please try again." }, 503);
+    if (existing) return json({ application: existing, idempotent: true });
+    const { data: progression, error: progressionError } = await db.rpc("ahct_next_intake_eligibility_for_user", {
+      p_user: user.id, p_intake: effectiveIntakeId
+    });
+    if (progressionError) {
+      console.error("next-intake eligibility", progressionError.message);
+      return json({ error: "Your programme-completion eligibility could not be checked. Please try again or contact the Academic Office." }, 503);
+    }
+    if (progression?.eligible !== true) {
+      return json({ error: String(progression?.reason || "Your current programme must be complete before you start another intake.") }, 403);
+    }
+  }
+
   const { data: intake } = await db.from("intakes").select("*").eq("id", effectiveIntakeId).single();
   const now = Date.now();
   if (!intake?.is_active || (intake.opens_at && now < +new Date(intake.opens_at)) || (intake.closes_at && now > +new Date(intake.closes_at))) return json({ error: "This intake is closed." }, 400);

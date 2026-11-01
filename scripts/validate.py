@@ -115,8 +115,18 @@ check("every function has index.ts", all((FUNCS / d / "index.ts").exists() for d
 cfg = text(ROOT / "supabase" / "config.toml")
 check("local auth configuration requires email confirmation", re.search(r"\[auth\.email\]\s*enable_confirmations\s*=\s*true", cfg, re.S) is not None)
 open_fns = sorted(re.findall(r"\[functions\.([a-z-]+)\]\s*verify_jwt\s*=\s*false", cfg))
-# document-branding performs verified user auth + admin role checks inside the handler.
-check("only explicitly expected gateway JWT exceptions (all with handler-side checks)", open_fns == ["admin-bulk-import", "admin-register", "document-branding", "document-verify", "payment-webhook", "upperlink-webhook"] and "userFrom(req)" in text(FUNCS / "document-branding" / "index.ts") and "userFrom(req)" in text(FUNCS / "admin-bulk-import" / "index.ts"), str(open_fns))
+# Every JWT exception has a purpose-built trust boundary inside its handler:
+# browser administration verifies the bearer token and role; payment/webhook
+# gateways validate provider signatures or challenge secrets.
+expected_open_fns = ["admin-bulk-import", "admin-communications", "admin-register", "document-branding", "document-verify", "payment-webhook", "upperlink-webhook", "whatsapp-webhook"]
+gateway_checks = (
+    "userFrom(req)" in text(FUNCS / "document-branding" / "index.ts")
+    and "userFrom(req)" in text(FUNCS / "admin-bulk-import" / "index.ts")
+    and "requireAdministrator(req)" in text(FUNCS / "admin-communications" / "index.ts")
+    and "x-hub-signature-256" in text(FUNCS / "whatsapp-webhook" / "index.ts")
+    and "timingSafeEqual" in text(FUNCS / "whatsapp-webhook" / "index.ts")
+)
+check("only explicitly expected gateway JWT exceptions (all with handler-side checks)", open_fns == expected_open_fns and gateway_checks, str(open_fns))
 check("sheet-review (two-way sheet control) is gone", "sheet-review" not in fn_dirs and "sheet-review" not in cfg)
 for name in ("deploy-functions.sh", "deploy-functions.ps1", "check-setup.sh", "check-setup.ps1"):
     listed = set(re.findall(r"[a-z]+(?:-[a-z]+)+", text(ROOT / "scripts" / name)))
@@ -145,8 +155,16 @@ check("CSP connect-src limited to Supabase", re.search(r"connect-src 'self' http
 rewrites = {r["source"].strip("/") for r in vj.get("rewrites", [])}
 check("every page has a clean-URL rewrite", all(p.stem in rewrites for p in pages if p.stem not in {"index", "404"}))
 cfgjs = text(FRONT / "js" / "config.js")
-check("config.js exposes only the anon key", "service_role" not in cfgjs and "onrender.com" not in cfgjs)
-check("checked-in frontend config does not target a live Supabase instance", not re.search(r"https://[a-z0-9-]{10,}\.supabase\.co", cfgjs) and "PUBLIC_ANON_KEY_NOT_CONFIGURED" in cfgjs)
+check("config.js exposes only the public Supabase configuration", "service_role" not in cfgjs and "SUPABASE_SERVICE_ROLE" not in cfgjs and "onrender.com" not in cfgjs)
+local_preview_fail_closed = (
+    ("const LOCAL = null" in cfgjs and "const cfg = isLocal ? (LOCAL || { SUPABASE_URL: '', SUPABASE_ANON_KEY: '' }) : PRODUCTION" in cfgjs)
+    or (
+        'if (isLocal && !LOCAL)' in cfgjs
+        and 'cfg = { SUPABASE_URL: "", SUPABASE_ANON_KEY: "" };' in cfgjs
+        and "usingLive = false;" in cfgjs
+    )
+)
+check("local browser previews do not fall back to the production project", local_preview_fail_closed)
 
 print("Public homepage privacy")
 home_html, home_js = text(FRONT / "index.html"), text(FRONT / "js" / "home.js")

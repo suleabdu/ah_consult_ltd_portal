@@ -17,6 +17,14 @@ verify_jwt = false
 [functions.document-branding]
 verify_jwt = false
 
+# Both endpoints validate their own request context: the administration endpoint
+# checks the browser session and staff role; the webhook validates Meta's HMAC.
+[functions.admin-communications]
+verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
 # Require ownership of the supplied email address before an applicant receives a
 # session. Mirror this setting in Supabase Dashboard > Authentication > Providers
 # > Email for every hosted environment, with a verified SMTP sender configured.
