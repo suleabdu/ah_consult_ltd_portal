@@ -20,6 +20,6 @@
     "eslint": "^10.14.0",
     "globals": "^15.14.0",
     "jsdom": "^25.0.1",
-    "read-excel-file": "5.8.5"
+    "read-excel-file": "9.3.14"
   }
 }
