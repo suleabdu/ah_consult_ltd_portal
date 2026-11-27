@@ -43,6 +43,13 @@
 .journey-choices{display:grid;grid-template-columns:1fr;gap:12px;margin-top:30px}
 .journey-choice{display:flex;flex-direction:column;gap:8px;min-width:0;padding:18px 20px;border:1px solid var(--c-line);text-decoration:none;background:var(--c-white);transition:border-color .2s,background .2s}
 .journey-choice:hover,.journey-choice:focus-visible{border-color:var(--c-orange);background:var(--c-soft)}
+.hiring-hero-card{display:flex;flex-direction:column;gap:7px;min-width:0;padding:18px 20px;border:1px solid #e9c5af;border-left:4px solid var(--c-orange);background:#fff7f1;color:var(--c-char);text-decoration:none;transition:border-color .2s,background .2s}
+.hiring-hero-card[hidden]{display:none!important}
+.hiring-hero-card:hover,.hiring-hero-card:focus-visible{border-color:var(--c-orange);background:#ffefe4}
+.hiring-eyebrow{color:var(--c-orange-ink);font:800 .76rem/1.4 var(--f-head);letter-spacing:.08em}
+.hiring-hero-card strong{font:700 clamp(1.1rem,1.5vw,1.3rem)/1.3 var(--f-head)}
+.hiring-hero-card>span:nth-of-type(2){color:var(--c-mute);font-size:.9rem;line-height:1.5}
+.hiring-link{color:var(--c-orange-ink);font:700 .85rem/1.5 var(--f-head);text-decoration:underline;text-underline-offset:3px}
 .journey-label{color:var(--c-orange-ink);font:700 .65rem/1.4 var(--f-head);letter-spacing:.08em}
 .journey-choice strong{font:700 clamp(1rem,1.45vw,1.23rem)/1.3 var(--f-head);color:var(--c-char)}
 .journey-choice>span:nth-of-type(2){font-size:.8rem;line-height:1.6;color:var(--c-mute)}

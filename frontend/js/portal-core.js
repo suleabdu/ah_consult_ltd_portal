@@ -29,6 +29,10 @@
     if (!session) { location.replace(o.loginUrl); return null; }
     var staff = null;
     if (o.role === "tutor") {
+      var assurance = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (assurance.error || (assurance.data.nextLevel === "aal2" && assurance.data.currentLevel !== "aal2")) {
+        location.replace(o.loginUrl); return null;
+      }
       var s = await sb.from("staff").select("*").eq("id", session.user.id).maybeSingle(); staff = s.data;
       if (!staff || staff.status !== "approved" || staff.role !== "tutor") {
         try { await sb.auth.signOut({ scope: "local" }); } catch (e) { console.warn("Could not sign out an unapproved tutor session:", e); }

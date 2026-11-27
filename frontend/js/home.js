@@ -30,6 +30,17 @@
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
   }
 
+  /* Show recruitment only when a published vacancy is actually open. */
+  (function hiringNotice() {
+    var notice = $('#hiring-notice');
+    if (!notice) return;
+    var close = $('.hiring-notice-close', notice);
+    if (close) close.addEventListener('click', function () { notice.hidden = true; });
+    rest('rpc/recruitment_public_vacancies', { method: 'POST', body: '{}' }).then(function (rows) {
+      if (Array.isArray(rows) && rows.length) notice.hidden = false;
+    }).catch(function () { /* Do not announce unconfirmed vacancies. */ });
+  })();
+
   /* Public contact address is published from Website Settings (never an assumed office location). */
   function publishedLocation(settings){
     var l=settings?.location||{},row=$('#publicAddressRow'),address=$('#publicAddress'),map=$('#publicMap');

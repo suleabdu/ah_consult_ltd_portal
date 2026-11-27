@@ -75,6 +75,24 @@ const $ = (d, s) => d.querySelector(s), $$ = (d, s) => [...d.querySelectorAll(s)
 
 /* ---------- Learning Impact ---------- */
 {
+  const { d, calls } = boot({ 'rpc/recruitment_public_vacancies': { body: [{ id: 'open-position' }] } });
+  await tick();
+  const notice = $(d, '#hiring-notice');
+  ok('hiring notice: opens for current vacancies and links to recruitment', notice && !notice.hidden && $(notice, 'a[href="recruitment.html"]'));
+  ok('hiring notice: checks public availability by POST', calls.some(c => c.url.endsWith('/rpc/recruitment_public_vacancies') && c.method === 'POST'));
+  $(notice, '.hiring-notice-close').click();
+  ok('hiring notice: can be dismissed', notice.hidden);
+}
+{
+  const { d } = boot({ 'rpc/recruitment_public_vacancies': { body: [] } });
+  await tick(); ok('hiring notice: stays hidden when there are no open positions', $(d, '#hiring-notice').hidden);
+}
+{
+  const { d } = boot({ 'rpc/recruitment_public_vacancies': { status: 500, body: {} } });
+  await tick(); ok('hiring notice: stays hidden if vacancy availability is unavailable', $(d, '#hiring-notice').hidden);
+}
+
+{
   const { d, calls } = boot({ 'rpc/public_impact_stats': { body: { learners_enrolled: null, graduates: null, programmes: 6, active_intakes: 1, as_of: 'x' } } });
   await tick();
   ok('impact: only reliable figures are shown (2 of 4)', $$(d, '#impact .metric').length === 2 && !d.getElementById('impact').hidden);

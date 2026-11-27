@@ -1,6 +1,12 @@
 /* Corporate public pages: lightweight navigation, contact routing and approved project photos. */
 (function(){'use strict';
 var $=function(s){return document.querySelector(s);}, config=window.APPLY_CONFIG||{};
+// The header link is always available; the announcement appears only for open positions.
+if((location.pathname==='/'||/\/index(?:\.html)?$/.test(location.pathname))&&config.SUPABASE_URL&&config.SUPABASE_ANON_KEY){
+ fetch(String(config.SUPABASE_URL).replace(/\/$/,'')+'/rest/v1/rpc/recruitment_public_vacancies',{method:'POST',headers:{apikey:config.SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:'{}',cache:'no-store'})
+ .then(function(r){if(!r.ok)throw Error('Unavailable');return r.json()}).then(function(rows){if(!Array.isArray(rows)||!rows.length)return;var entry=$('#hiring-entry'),notice=$('#hiring-notice');if(entry)entry.hidden=false;if(notice)notice.hidden=false}).catch(function(){});
+}
+var hiringClose=$('#hiring-notice .hiring-notice-close');if(hiringClose)hiringClose.addEventListener('click',function(){var notice=$('#hiring-notice');if(notice)notice.hidden=true});
 var menu=$('#siteMenu'), toggle=$('#menuBtn');
 if(menu&&toggle){function open(v){menu.classList.toggle('open',v);toggle.setAttribute('aria-expanded',String(v));toggle.textContent=v?'Close':'Menu';}
  toggle.addEventListener('click',function(){open(!menu.classList.contains('open'))});
