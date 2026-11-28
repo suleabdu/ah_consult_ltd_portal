@@ -1,17 +1,16 @@
 (function(){
  'use strict';
- const cfg=window.APPLY_CONFIG||{},list=document.getElementById('vacancies'),detail=document.getElementById('vacancy-detail'),content=document.getElementById('detail-content'),count=document.getElementById('career-count');
+ const cfg=window.APPLY_CONFIG||{},list=document.getElementById('vacancies'),detail=document.getElementById('vacancy-detail'),content=document.getElementById('detail-content');
  document.getElementById('yr').textContent=String(new Date().getFullYear());
  const escapeText=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const date=v=>v?new Date(v).toLocaleDateString('en-NG',{day:'numeric',month:'long',year:'numeric'}):'Until further notice';
- const updateCount=value=>{if(count)count.textContent=value};
- if(!cfg.SUPABASE_URL||!cfg.SUPABASE_ANON_KEY||!window.supabase){updateCount('Unavailable');list.textContent='Career opportunities are temporarily unavailable. Please check back later.';return;}
+ if(!cfg.SUPABASE_URL||!cfg.SUPABASE_ANON_KEY||!window.supabase){list.textContent='Career opportunities are temporarily unavailable. Please check back later.';return;}
  const sb=window.supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY);
  async function loadVacancies(){
-  list.textContent='Loading opportunities…';updateCount('Checking…');
+  list.textContent='Loading opportunities…';
   let r;try{r=await sb.rpc('recruitment_public_vacancies')}catch(_){r={error:true}}
-  if(r.error){updateCount('Unavailable');list.innerHTML='<div class="career-notice">Opportunities could not be loaded. Please try again shortly.</div>';return;}
-  const rows=Array.isArray(r.data)?r.data:[];updateCount(String(rows.length));
+  if(r.error){list.innerHTML='<div class="career-notice">Opportunities could not be loaded. Please try again shortly.</div>';return;}
+  const rows=Array.isArray(r.data)?r.data:[];
   if(!rows.length){list.innerHTML='<div class="career-notice"><strong>Thank you for your interest in joining AH Consult.</strong><br>There are no open positions at the moment. Please visit this page again for future opportunities.</div>';return;}
   list.innerHTML=rows.map(v=>`<article class="vacancy-card"><h3><a href="?job=${encodeURIComponent(v.id)}#vacancy-detail" data-vacancy="${escapeText(v.id)}">${escapeText(v.title)}</a></h3><div class="vacancy-meta"><span>${escapeText(v.department||'AH Consult Ltd')}</span><span>${escapeText(v.location||'Nigeria')}</span><span>${escapeText(v.employment_type||'')}</span><span>Closes: ${escapeText(date(v.closes_at))}</span></div><p>${escapeText(v.summary||'')}</p><div class="vacancy-actions"><a class="btn btn-primary career-apply" href="?job=${encodeURIComponent(v.id)}#vacancy-detail" data-vacancy="${escapeText(v.id)}">Apply for this role <span aria-hidden="true">→</span></a><a class="btn" href="?job=${encodeURIComponent(v.id)}#vacancy-detail" data-vacancy="${escapeText(v.id)}">View position</a></div></article>`).join('');
   list.querySelectorAll('[data-vacancy]').forEach(link=>link.addEventListener('click',event=>{if(event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;event.preventDefault();showVacancy(link.dataset.vacancy)}));
@@ -23,7 +22,7 @@
   let r;try{r=await sb.rpc('recruitment_public_vacancy',{p_vacancy:id})}catch(_){r={error:true}}if(request!==detailRequest)return;const v=r.data;
   if(r.error||!v){content.innerHTML='<div class="career-notice">This position is no longer available. Please review the current opportunities above.</div>';await loadVacancies();return;}
   const section=(label,value)=>value?`<h3>${label}</h3><div class="career-description">${escapeText(value)}</div>`:'';
-  content.innerHTML=`<button type="button" class="career-back" id="careerBack">← Back to opportunities</button><p class="eyebrow">CURRENT OPPORTUNITY</p><h2>${escapeText(v.title)}</h2><div class="vacancy-meta"><span>${escapeText(v.department||'AH Consult Ltd')}</span><span>${escapeText(v.location||'Nigeria')}</span><span>${escapeText(v.employment_type||'')}</span><span>Closes: ${escapeText(date(v.closes_at))}</span></div><a class="btn btn-primary career-apply" href="#apply-area">Apply now <span aria-hidden="true">↓</span></a>${section('About the role',v.description||v.summary)}${section('Responsibilities',v.responsibilities)}${section('Requirements',v.requirements)}<div id="apply-area" class="career-form-section"></div>`;
+  content.innerHTML=`<button type="button" class="career-back" id="careerBack">← Back to opportunities</button><div class="career-detail-grid"><article class="career-job-details"><p class="eyebrow">CURRENT OPPORTUNITY</p><h2>${escapeText(v.title)}</h2><div class="vacancy-meta"><span>${escapeText(v.department||'AH Consult Ltd')}</span><span>${escapeText(v.location||'Nigeria')}</span><span>${escapeText(v.employment_type||'')}</span><span>Closes: ${escapeText(date(v.closes_at))}</span></div><a class="btn btn-primary career-apply" href="#apply-area">Apply now <span aria-hidden="true">↓</span></a>${section('About the role',v.description||v.summary)}${section('Responsibilities',v.responsibilities)}${section('Requirements',v.requirements)}</article><section id="apply-area" class="career-form-section" aria-label="Application form"></section></div>`;
   content.querySelector('#careerBack').onclick=()=>{detailRequest++;detail.hidden=true;document.getElementById('opportunities').scrollIntoView({behavior:'smooth'});};
   renderApplication(v);
  }

@@ -8,14 +8,14 @@ const code = compiled.code.replace(/^import .*?;\s*/m, '');
 const vacancy = '00000000-0000-4000-8000-000000000001';
 const submission = '00000000-0000-4000-8000-000000000002';
 let handler, state;
-const reset = () => state={uploads:[],removed:[],calls:[],rate:true,replay:false,previous:false,ambiguous:false};
+const reset = () => state={uploads:[],removed:[],calls:[],rate:true,replay:false,previous:false,ambiguous:false,dbError:null};
 const db={
   rpc: async (name,args) => {
     state.calls.push({name,args});
     if(name==='check_rate_limit') return state.rate===null ? {error:{message:'unavailable'}} : {data:state.rate};
     if(name==='recruitment_guest_submission_status') return {data:state.previous ? {id:'submitted',replayed:true} : null};
     if(name==='recruitment_public_vacancy') return {data:{id:vacancy,requires_cv:true,requires_passport:false,questions:[]}};
-    if(name==='recruitment_submit_guest_application') return state.ambiguous ? {error:{code:'NETWORK'}} : {data:{id:'submitted',replayed:state.replay}};
+    if(name==='recruitment_submit_guest_application') return state.dbError ? {error:{code:state.dbError}} : state.ambiguous ? {error:{code:'NETWORK'}} : {data:{id:'submitted',replayed:state.replay}};
     throw new Error('Unexpected RPC '+name);
   },
   storage:{from:()=>({upload:async(path)=>{state.uploads.push(path);return {data:{path}}},remove:async(paths)=>{state.removed.push(...paths);return {data:[]}}})}
@@ -54,6 +54,9 @@ assert.equal(response.status,200); assert.equal(state.uploads.length,0);
 assert.equal(state.calls.some(x=>x.name==='recruitment_public_vacancy'),false);
 reset(); state.ambiguous=true; response=await handler(request());
 assert.equal(response.status,503); assert.equal(state.uploads.length,1); assert.equal(state.removed.length,0);
+reset(); state.dbError='42702'; response=await handler(request());
+assert.equal(response.status,503); assert.deepEqual(state.removed,state.uploads);
+assert.match((await response.json()).error,/temporarily unavailable/);
 reset();
 response=await handler(new Request('https://example.org',{method:'POST',headers:{'content-type':'multipart/form-data; boundary=test','content-length':String(26*1024*1024)},body:'x'}));
 assert.equal(response.status,400); assert.equal(state.uploads.length,0);

@@ -14,13 +14,15 @@ w.APPLY_CONFIG={SUPABASE_URL:'https://example.supabase.co',SUPABASE_ANON_KEY:'pu
 w.supabase={createClient:()=>({rpc:async(name)=>name==='recruitment_public_vacancies'?{data:[{id:vacancy,title:'Architect',summary:'Design'}],error:null}:{data:{id:vacancy,title:'Architect',description:'Our role',requires_cv:true,questions:[{id:question,prompt:'Your experience',kind:'text',required:true},{id:fileQuestion,prompt:'Portfolio',kind:'file',required:true}]},error:null},functions:{invoke:async(name,args)=>{calls.push([name,args]);return calls.length===1?{error:{context:{json:async()=>({error:'Please try again later.'})}}}:{data:{id:'success'},error:null}}}})};
 w.eval(script);
 await new Promise(r=>setTimeout(r,30));
-assert.equal(w.document.getElementById('career-count').textContent,'1');
+assert.equal(w.document.getElementById('career-count'),null,'open-position count is not displayed');
 const title=w.document.querySelector('.vacancy-card h3 a');
 assert.ok(title.href.includes('job='+vacancy));
 const apply=w.document.querySelector('.vacancy-actions .btn-primary');
 assert.match(apply.textContent,/Apply for this role/);
 title.click();await new Promise(r=>setTimeout(r,20));
 assert.equal(w.document.querySelector('#detail-content h2').textContent,'Architect');
+assert.ok(w.document.querySelector('.career-detail-grid > .career-job-details'));
+assert.ok(w.document.querySelector('.career-detail-grid > #apply-area'));
 w.document.getElementById('careerBack').click();assert.equal(w.document.getElementById('vacancy-detail').hidden,true);
 apply.click();await new Promise(r=>setTimeout(r,20));
 assert.match(w.document.getElementById('apply-area').textContent,/No account is required/);

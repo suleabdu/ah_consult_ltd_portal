@@ -119,6 +119,15 @@ Deno.serve(safe(async (req: Request) => {
     cleanup = false;
     const result = await db.rpc("recruitment_submit_guest_application", { p_vacancy:vacancyId, p_upload_id:uploadId, p_submission_id:submissionId, p_application:{full_name:input.full_name,email:input.email,phone:input.phone,consent:true,answers,cv_path:cv,passport_path:passport} });
     if (result.error) {
+      // Log only the database error code: messages may include applicant data.
+      const code = /^[A-Z0-9]{5}$/.test(result.error.code || "") ? result.error.code : "unknown";
+      console.error(JSON.stringify({ event:"recruitment_submission_failed", code }));
+      // PostgreSQL reports ambiguous column references after rolling back the
+      // statement, so those uploads can be removed safely.
+      if (code === "42702") {
+        cleanup=true;
+        return json({ error:"Applications are temporarily unavailable. Please try again later." }, 503);
+      }
       if (result.error.code === "P0001" || result.error.code === "23505") {
         cleanup=true;
         return json({ error:"Your application could not be accepted. Please check the position and try again." }, 400);
