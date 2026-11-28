@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { JSDOM } from 'jsdom';
+
+const html=readFileSync('frontend/recruitment.html','utf8');
+const script=readFileSync('frontend/js/recruitment.js','utf8');
+const vacancy='11111111-1111-4111-8111-111111111111';
+const dom=new JSDOM(html,{url:'https://example.test/recruitment.html?job='+vacancy,runScripts:'outside-only'});
+const w=dom.window,calls=[];
+w.HTMLElement.prototype.scrollIntoView=function(){};
+w.APPLY_CONFIG={SUPABASE_URL:'https://example.supabase.co',SUPABASE_ANON_KEY:'public'};
+w.supabase={createClient:()=>({rpc:async(name,args)=>{calls.push([name,args]);if(name==='recruitment_public_vacancies')return {data:[],error:null};return {data:{id:vacancy,title:'Architect',questions:[]},error:null}},auth:{getSession:async()=>({data:{session:null}})}})};
+w.eval(script);
+await new Promise(resolve=>setTimeout(resolve,50));
+assert.equal(calls[0][0],'recruitment_public_vacancies');
+assert.equal(calls[1][0],'recruitment_public_vacancy');
+assert.equal(calls[1][1].p_vacancy,vacancy);
+assert.equal(w.document.querySelector('#detail-content h2').textContent,'Architect');
+assert.equal(w.document.querySelector('#vacancy-detail').hidden,false);
+dom.window.close();
+console.log('PASS featured vacancy deep link opens the selected position even when the public index is empty');

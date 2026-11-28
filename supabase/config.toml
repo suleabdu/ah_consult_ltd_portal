@@ -34,3 +34,8 @@ enable_confirmations = true
 # The browser Auth access token is checked inside this function, with request-aware CORS.
 [functions.admin-bulk-import]
 verify_jwt = false
+
+# The staff invitation handler authenticates the bearer token and checks
+# the caller's current delegated permissions before using the service role.
+[functions.staff-invite]
+verify_jwt = false

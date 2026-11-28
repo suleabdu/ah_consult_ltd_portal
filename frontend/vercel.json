@@ -4,6 +4,10 @@
   "trailingSlash": false,
   "rewrites": [
     {
+      "source": "/staff-invite-accept",
+      "destination": "/staff-invite-accept.html"
+    },
+    {
       "source": "/recruitment",
       "destination": "/recruitment.html"
     },

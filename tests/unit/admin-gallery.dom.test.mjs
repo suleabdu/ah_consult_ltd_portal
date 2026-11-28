@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 
-const src = readFileSync(new URL('../../frontend/js/pages/admin-dashboard.js', import.meta.url), 'utf8');
+const src = readFileSync(new URL('../../frontend/js/pages/admin-dashboard.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const a = src.indexOf('async function galleryManager(M){'), endMark = 'await load();\n }';
 const fnSrc = src.slice(a, src.indexOf(endMark, a) + endMark.length);
 if (!fnSrc.startsWith('async function galleryManager')) throw new Error('galleryManager not found');
@@ -28,7 +28,7 @@ function setup(rows, { denyWrites = false } = {}) {
   return { d, w, db, log, toasts, env, start: () => run(d.getElementById('m')) };
 }
 const base = [
-  { id: 'a', image_url: 'https://x/a.jpg', caption: 'A', category: 'training', status: 'published', featured: true, sort_order: 10, alt_text: '' },
+  { id: 'a', image_url: 'https://x/a.jpg', caption: 'A', category: 'training', status: 'published', featured: true, sort_order: 10, alt_text: '', display_locations: ['student_hub'] },
   { id: 'b', image_url: 'https://x/b.jpg', caption: 'B', category: 'events', status: 'draft', featured: false, sort_order: 20, alt_text: '' },
   { id: 'c', image_url: 'https://x/c.jpg', caption: 'C', category: 'projects', status: 'archived', featured: false, sort_order: 30, alt_text: '' },
 ];
@@ -38,9 +38,15 @@ const fire = (w, el, type = 'change') => el.dispatchEvent(new w.Event(type, { bu
 { const t = setup(base); await t.start(); const { d } = t;
   ok('lists ALL photos for the administrator, including drafts and archived', cards(d).length === 3);
   ok('shows the published count', /1 published · 3 total/.test(d.getElementById('galMgr').textContent));
-  ok('explains visibility per photo', /Hidden: not published yet/.test(cards(d)[1].textContent) && /Visible on the homepage/.test(cards(d)[0].textContent));
+  ok('explains visibility per photo', /Hidden: not published yet/.test(cards(d)[1].textContent) && /Published on selected pages/.test(cards(d)[0].textContent));
   const f = d.getElementById('galFilter'); f.value = 'draft'; fire(t.w, f); ok('filter shows only drafts', cards(d).length === 1 && cards(d)[0].dataset.id === 'b');
   const f2 = d.getElementById('galFilter'); f2.value = 'all'; fire(t.w, f2);   // the list re-rendered, so fetch the fresh control
+  const servicePlacement = cards(d)[0].querySelector('[data-location=services]');
+  servicePlacement.checked = true; fire(t.w, servicePlacement); await tick();
+  ok('selected pages are saved without losing previous choices', t.db[0].display_locations.join(',') === 'student_hub,services');
+  const studentPlacement = cards(d)[0].querySelector('[data-location=student_hub]');
+  studentPlacement.checked = false; fire(t.w, studentPlacement); await tick();
+  ok('deselecting a page removes only that placement', t.db[0].display_locations.join(',') === 'services');
   // publish
   const sel = cards(d)[1].querySelector('[data-f=status]'); sel.value = 'published'; fire(t.w, sel); await tick();
   ok('publishing saves status=published', t.log.some((l) => l[0] === 'update' && l[1] === 'b' && l[2].status === 'published') && t.db.find((x) => x.id === 'b').status === 'published');

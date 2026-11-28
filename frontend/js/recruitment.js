@@ -54,5 +54,6 @@
    }catch(err){message.className='career-error';message.textContent=err.message||'We could not submit your application. Please try again.';button.disabled=false;}
   };
  }
- loadVacancies();
+ const linkedJob=new URLSearchParams(location.search).get('job');
+ loadVacancies().then(()=>{if(linkedJob&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(linkedJob))showVacancy(linkedJob)});
 })();

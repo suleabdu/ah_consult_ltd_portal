@@ -36,8 +36,15 @@
     if (!notice) return;
     var close = $('.hiring-notice-close', notice);
     if (close) close.addEventListener('click', function () { notice.hidden = true; });
-    rest('rpc/recruitment_public_vacancies', { method: 'POST', body: '{}' }).then(function (rows) {
-      if (Array.isArray(rows) && rows.length) notice.hidden = false;
+    rest('rpc/recruitment_featured_vacancies', { method: 'POST', body: JSON.stringify({p_surface:'studenthub'}) }).then(function (rows) {
+      if (!Array.isArray(rows) || !rows.length) return;
+      var job = rows[0], id = String(job.id || '');
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return;
+      var heading = $('.hiring-notice-heading', notice), details = $('.hiring-notice-text', notice), link = $('.hiring-notice-link', notice);
+      if (heading) heading.textContent = String(job.title || 'Join the AH Consult team');
+      if (details) details.textContent = [job.department,job.location,job.employment_type].filter(Boolean).join(' · ') + (rows.length > 1 ? ' · ' + (rows.length-1) + ' more position' + (rows.length===2?'':'s') : '');
+      if (link) { link.href = 'recruitment.html?job=' + encodeURIComponent(id); link.textContent = 'View details and apply'; }
+      notice.hidden = false;
     }).catch(function () { /* Do not announce unconfirmed vacancies. */ });
   })();
 
@@ -158,7 +165,7 @@
     var posEl = $('#gal-position'), capEl = $('#gal-caption'), dlg = $('#lightbox');
     if (!stage || !controls) return;
     var CATS = [['training', 'Training'], ['projects', 'Projects'], ['graduation', 'Graduation'], ['events', 'Events'], ['other', 'Other']];
-    var CACHE = 'ahct_gallery_student_v1', all = [], view = [], filter = 'all', active = 0;
+    var CACHE = 'ahct_gallery_student_v2', all = [], view = [], filter = 'all', active = 0;
     var signature = '', lastFetch = 0, pending = null, nodes = new Map(), lastTrigger = null;
     var reduced = Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     var paused = reduced, hovering = false, rotating = null, touchedAt = null;
@@ -332,7 +339,7 @@
     }
     function refresh(manual) {
       lastFetch = Date.now();
-      return rest('gallery_items?select=id,image_url,caption,alt_text,category,featured,sort_order&status=eq.published&category=in.(training,graduation,events)&order=sort_order.asc,created_at.asc&limit=200')
+      return rest('gallery_items?select=id,image_url,caption,alt_text,category,featured,sort_order&status=eq.published&display_locations=cs.%7Bstudent_hub%7D&order=sort_order.asc,created_at.asc&limit=200')
         .then(function (rows) {
           try { localStorage.setItem(CACHE, JSON.stringify({ t: Date.now(), rows: rows })); } catch (e) { /* private mode */ }
           if (!rows.length) { signature = '[]'; all = []; nodes.clear(); stage.textContent = ''; setState('New photographs are coming soon.'); return; }

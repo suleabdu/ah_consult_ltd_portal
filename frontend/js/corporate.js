@@ -3,8 +3,8 @@
 var $=function(s){return document.querySelector(s);}, config=window.APPLY_CONFIG||{};
 // The header link is always available; the announcement appears only for open positions.
 if((location.pathname==='/'||/\/index(?:\.html)?$/.test(location.pathname))&&config.SUPABASE_URL&&config.SUPABASE_ANON_KEY){
- fetch(String(config.SUPABASE_URL).replace(/\/$/,'')+'/rest/v1/rpc/recruitment_public_vacancies',{method:'POST',headers:{apikey:config.SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:'{}',cache:'no-store'})
- .then(function(r){if(!r.ok)throw Error('Unavailable');return r.json()}).then(function(rows){if(!Array.isArray(rows)||!rows.length)return;var entry=$('#hiring-entry'),notice=$('#hiring-notice');if(entry)entry.hidden=false;if(notice)notice.hidden=false}).catch(function(){});
+ fetch(String(config.SUPABASE_URL).replace(/\/$/,'')+'/rest/v1/rpc/recruitment_featured_vacancies',{method:'POST',headers:{apikey:config.SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:JSON.stringify({p_surface:'homepage'}),cache:'no-store'})
+ .then(function(r){if(!r.ok)throw Error('Unavailable');return r.json()}).then(function(rows){if(!Array.isArray(rows)||!rows.length)return;var entry=$('#hiring-entry'),notice=$('#hiring-notice'),job=rows[0],id=String(job.id||'');if(entry)entry.hidden=false;if(!notice||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))return;var heading=notice.querySelector('.hiring-notice-heading'),details=notice.querySelector('.hiring-notice-text'),link=notice.querySelector('.hiring-notice-link');if(heading)heading.textContent=String(job.title||'Join the AH Consult team');if(details)details.textContent=[job.department,job.location,job.employment_type].filter(Boolean).join(' · ')+(rows.length>1?' · '+(rows.length-1)+' more position'+(rows.length===2?'':'s'):'');if(link){link.href='recruitment.html?job='+encodeURIComponent(id);link.textContent='View details and apply'}notice.hidden=false}).catch(function(){});
 }
 var hiringClose=$('#hiring-notice .hiring-notice-close');if(hiringClose)hiringClose.addEventListener('click',function(){var notice=$('#hiring-notice');if(notice)notice.hidden=true});
 var menu=$('#siteMenu'), toggle=$('#menuBtn');
@@ -38,7 +38,7 @@ var stage=$('#project-highlights');if(!stage)return;
 var base=String(config.SUPABASE_URL||'').replace(/\/$/,''),publicAnonKey=config.SUPABASE_ANON_KEY;
 function info(message){stage.textContent='';var p=document.createElement('p');p.className='gallery-note';p.textContent=message;stage.appendChild(p)}
 if(!base||!publicAnonKey){info('Project photographs will appear here when the published gallery is connected.');return;}
-fetch(base+'/rest/v1/gallery_items?select=id,image_url,caption,alt_text&status=eq.published&category=eq.projects&order=sort_order.asc,created_at.asc&limit=3',{headers:{apikey:publicAnonKey},cache:'no-store'})
+fetch(base+'/rest/v1/gallery_items?select=id,image_url,caption,alt_text&status=eq.published&display_locations=cs.%7Bhomepage%7D&order=sort_order.asc,created_at.asc&limit=3',{headers:{apikey:publicAnonKey},cache:'no-store'})
 .then(function(r){if(!r.ok)throw Error('Gallery unavailable');return r.json()}).then(function(rows){if(!rows.length){info('New project photographs will appear here once published by the team.');return;}
 stage.textContent='';rows.forEach(function(r){var f=document.createElement('figure');f.className='project-photo';var img=document.createElement('img');img.src=r.image_url;img.alt=r.alt_text||r.caption||'Published project photograph';img.loading='lazy';img.decoding='async';img.width=640;img.height=450;var cap=document.createElement('figcaption');cap.textContent=r.caption||'AH Consult project';f.append(img,cap);stage.appendChild(f)})}).catch(function(){info('Project photographs are temporarily unavailable.')});
 })();

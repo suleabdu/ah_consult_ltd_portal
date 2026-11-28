@@ -1,0 +1,6 @@
+.placement-gallery{padding:clamp(3rem,6vw,5rem) 0;background:#f7f6f4}
+.placement-gallery h2{margin:0 0 1.5rem;color:#171717}
+.placement-gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr));gap:1rem}
+.placement-gallery figure{margin:0;overflow:hidden;background:#fff;border:1px solid #e4e1dd;border-radius:8px}
+.placement-gallery img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
+.placement-gallery figcaption{padding:.8rem 1rem;color:#343434;line-height:1.5}
