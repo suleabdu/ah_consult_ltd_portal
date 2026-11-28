@@ -1,0 +1,14 @@
+.recruitment-review-modal .mbox{max-width:960px;min-width:0}
+.recruitment-documents{border-top:1px solid #e5e7eb;margin-top:1.5rem;padding-top:1rem}
+.recruitment-document-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.8rem 0;border-bottom:1px solid #eee}
+.recruitment-document-row>div,.recruitment-preview-head>div:first-child{display:flex;flex-direction:column;min-width:0;gap:.25rem}
+.recruitment-document-row small,.recruitment-preview-head span{font-size:12px;color:#6b7280;overflow-wrap:anywhere}
+.recruitment-preview{margin-top:1.25rem;border:1px solid #dedbd7;border-radius:10px;overflow:hidden;background:#f7f6f4}
+.recruitment-preview-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;background:#fff;padding:1rem;border-bottom:1px solid #e5e7eb}
+.recruitment-preview-head .row{margin:0}
+.recruitment-preview-body{min-height:240px;max-height:65vh;overflow:auto;padding:1rem;text-align:center}
+.recruitment-preview-body iframe{display:block;width:100%;height:60vh;min-height:360px;border:0;background:#fff}
+.recruitment-preview-body img{display:block;max-width:100%;max-height:60vh;margin:auto;object-fit:contain}
+.recruitment-preview-body pre{margin:0;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.6 sans-serif;background:#fff;padding:1rem}
+.recruitment-preview [data-preview-status]{margin:.5rem 1rem 1rem}.recruitment-preview-error{padding:1rem;color:#991b1b}
+@media(max-width:600px){.recruitment-document-row{align-items:stretch;flex-direction:column}.recruitment-document-row .btn{width:100%}.recruitment-preview-head .row{width:100%}.recruitment-preview-head .row .btn{flex:1}.recruitment-preview-body{padding:.5rem}.recruitment-preview-body iframe{min-height:280px;height:50vh}}

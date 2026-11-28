@@ -61,7 +61,7 @@
   function shell(o) {
     var root = document.getElementById("root"), cur = o.start;
     root.innerHTML = '<header class="top"><button id="burger" type="button" aria-label="Open menu">☰</button><img class="lg" alt="" src="https://lh3.googleusercontent.com/d/1Qp_nbC6oekgdzjJqGBHwHw125t1ABYUf" onerror="this.style.display=\'none\'"><span class="org" data-org>AH Consult</span><span class="sp"></span><span class="me">' + esc(o.who) + '</span><a href="/" style="color:#fdba74;text-decoration:none;font-size:12.5px;font-weight:700">Website</a><button id="so" type="button" class="top-signout">Sign out</button></header>' +
-      '<div class="shell"><nav id="nav"></nav><main id="main"></main></div><footer>&copy; ' + new Date().getFullYear() + " AH Consult Ltd &middot; " + esc(o.footer || "") + "</footer>";
+      '<div class="shell"><nav id="nav"></nav><main id="main"></main></div>' + (window.AHPortalFooter ? window.AHPortalFooter.html(o.footer || "") : '<footer>&copy; ' + new Date().getFullYear() + " AH Consult Ltd &middot; " + esc(o.footer || "") + "</footer>");
     var nav = document.getElementById("nav"), main = document.getElementById("main");
     // Pages can return the legacy flat list, or grouped entries in the form
     // { label: "Learning", items: [[id, label, icon, badge], ...] }. Keeping
@@ -74,7 +74,7 @@
       return entries.map(function (group, index) { return { key: "group-" + index, label: group.label || "", items: Array.isArray(group.items) ? group.items : [] }; }).filter(function (group) { return group.items.length; });
     }
     function navItems() { return navGroups().reduce(function (all, group) { return all.concat(group.items); }, []); }
-    function navButton(n) { return '<button data-v="' + n[0] + '" class="' + (n[0] === cur ? "act" : "") + '">' + (n[2] || "") + " " + esc(n[1]) + (n[3] ? '<span class="b">' + n[3] + "</span>" : "") + "</button>"; }
+    function navButton(n) { return '<button data-v="' + n[0] + '" class="' + (n[0] === cur ? "act" : "") + (n[4] === false ? ' nav-denied' : '') + '"' + (n[4] === false ? ' aria-disabled="true"' : '') + '>' + (n[2] || "") + " " + esc(n[1]) + (n[3] ? '<span class="b">' + n[3] + "</span>" : "") + (n[4] === false ? '<span class="nav-lock" aria-hidden="true">🔒</span>' : '') + "</button>"; }
     function expandActiveGroup(groups) {
       groups.forEach(function (group) {
         if (group.items.some(function (item) { return item[0] === cur; })) collapsedGroups[group.key] = false;
@@ -91,7 +91,7 @@
       nav.querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { go(b.dataset.v); nav.classList.remove("open"); }; });
       nav.querySelectorAll(".nav-group-toggle").forEach(function (b) { b.onclick = function () { collapsedGroups[b.dataset.group] = b.getAttribute("aria-expanded") === "true"; paintNav(false); }; });
     }
-    function go(id) { var entries = navItems(), ok = entries.some(function (n) { return n[0] === id; }); cur = ok ? id : (entries[0] ? entries[0][0] : o.start); paintNav(true); main.innerHTML = o.render(cur); o.wire(cur, main); window.scrollTo(0, 0); }
+    function go(id) { var entries = navItems(), selected = entries.find(function (n) { return n[0] === id; }); if (selected && selected[4] === false) { toast('You do not have permission to access this area. Contact your administrator.', true); return; } var first = entries.find(function (n) { return n[4] !== false; }); cur = selected ? id : (first ? first[0] : o.start); paintNav(true); main.innerHTML = o.render(cur); o.wire(cur, main); window.scrollTo(0, 0); }
     document.getElementById("burger").onclick = function () { nav.classList.toggle("open"); };
     document.getElementById("so").onclick = function () { o.signOut(); };
     window.PCgo = go; paintNav(true); main.innerHTML = o.render(cur); o.wire(cur, main);

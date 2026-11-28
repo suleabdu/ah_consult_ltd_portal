@@ -1,0 +1,28 @@
+/* Shared AH Consult typography: one body typeface and a measured type scale.
+   Website & Branding's body-font selection remains the common typeface. */
+:root {
+  --ah-site-font: var(--font-body, 'Open Sans', Arial, sans-serif);
+  --f-head: var(--ah-site-font);
+  --f-body: var(--ah-site-font);
+  --v18-font: var(--ah-site-font);
+}
+
+html body { font-family: var(--ah-site-font) !important; font-size: 15px !important; line-height: 1.6; }
+body :is(h1,h2,h3,h4,h5,h6,button,input,select,textarea), body .nav-link { font-family: var(--ah-site-font) !important; }
+body :is(h1,h2,h3) { zoom: 1 !important; }
+body .site-footer, body .site-footer :is(h1,h2,h3,h4,p,a,li,span) { font-family: var(--ah-site-font) !important; }
+
+/* Keep a clear visual hierarchy while reducing oversized display headings. */
+body.public-v18 main h1 { font-size: clamp(1.95rem, 4vw, 3.4rem) !important; }
+body.public-v18 main h2 { font-size: clamp(1.5rem, 2.5vw, 2.25rem) !important; }
+body.public-v18 main h3 { font-size: 1.125rem !important; }
+body.public-v18 .hero-hub-card strong { font-size: clamp(2rem, 4vw, 3.25rem) !important; }
+body.ahds.v18 main h1 { font-size: clamp(1.4rem, 2vw, 1.8rem) !important; }
+body.ahds.v18 main h2 { font-size: 1.25rem !important; }
+body.ahds.v18 main h3 { font-size: 1rem !important; }
+body.ahds.v18 .wrap > .hero h1 { font-size: clamp(1.55rem, 2.8vw, 2.2rem) !important; }
+
+/* Keep form text readable and prevent automatic mobile form zoom. */
+@media (max-width: 767px) {
+  body :is(input:not([type=checkbox]):not([type=radio]),select,textarea) { font-size: 16px !important; }
+}
