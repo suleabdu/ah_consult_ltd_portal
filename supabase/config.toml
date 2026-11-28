@@ -39,3 +39,7 @@ verify_jwt = false
 # the caller's current delegated permissions before using the service role.
 [functions.staff-invite]
 verify_jwt = false
+
+# Public applications are validated and rate limited by the handler.
+[functions.recruitment-apply]
+verify_jwt = false

@@ -118,13 +118,16 @@ open_fns = sorted(re.findall(r"\[functions\.([a-z-]+)\]\s*verify_jwt\s*=\s*false
 # Every JWT exception has a purpose-built trust boundary inside its handler:
 # browser administration verifies the bearer token and role; payment/webhook
 # gateways validate provider signatures or challenge secrets.
-expected_open_fns = ["admin-bulk-import", "admin-communications", "admin-register", "document-branding", "document-verify", "payment-webhook", "staff-invite", "upperlink-webhook", "whatsapp-webhook"]
+expected_open_fns = ["admin-bulk-import", "admin-communications", "admin-register", "document-branding", "document-verify", "payment-webhook", "recruitment-apply", "staff-invite", "upperlink-webhook", "whatsapp-webhook"]
 gateway_checks = (
     "userFrom(req)" in text(FUNCS / "document-branding" / "index.ts")
     and "userFrom(req)" in text(FUNCS / "admin-bulk-import" / "index.ts")
     and "requireAdministrator(req)" in text(FUNCS / "admin-communications" / "index.ts")
     and "userFrom(req)" in text(FUNCS / "staff-invite" / "index.ts")
     and "governance_can_assign_role" in text(FUNCS / "staff-invite" / "index.ts")
+    and "check_rate_limit" in text(FUNCS / "recruitment-apply" / "index.ts")
+    and "boundedBody" in text(FUNCS / "recruitment-apply" / "index.ts")
+    and "recruitment_submit_guest_application" in text(FUNCS / "recruitment-apply" / "index.ts")
     and "x-hub-signature-256" in text(FUNCS / "whatsapp-webhook" / "index.ts")
     and "timingSafeEqual" in text(FUNCS / "whatsapp-webhook" / "index.ts")
 )
