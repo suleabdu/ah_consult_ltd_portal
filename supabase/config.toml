@@ -43,3 +43,7 @@ verify_jwt = false
 # Public applications are validated and rate limited by the handler.
 [functions.recruitment-apply]
 verify_jwt = false
+
+# The deletion handler verifies the user and administrator authority itself.
+[functions.recruitment-delete]
+verify_jwt = false

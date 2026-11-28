@@ -1,4 +1,5 @@
 import { admin, clientIp, json, safe } from "../_shared/lib.ts";
+import { normalizeWhatsAppE164 } from "../_shared/whatsapp.ts";
 
 const MAX_BODY = 25 * 1024 * 1024;
 const MAX_FILE = 10 * 1024 * 1024;
@@ -71,6 +72,7 @@ Deno.serve(safe(async (req: Request) => {
       typeof input.email !== "string" || input.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim()) ||
       typeof input.phone !== "string" || input.phone.trim().length < 7 || input.phone.trim().length > 40)
     return json({ error:"Enter your name, valid email address and phone number." }, 400);
+  if (input.whatsapp_opt_in === true && !normalizeWhatsAppE164(input.phone)) return json({ error:"Enter a valid WhatsApp phone number with country code, or leave WhatsApp updates unchecked." }, 400);
   if (!input.answers || typeof input.answers !== "object" || Array.isArray(input.answers)) return json({ error:"Invalid answers." }, 400);
   const answers = { ...(input.answers as Record<string, unknown>) };
   const questions = Array.isArray(vacancy.questions) ? vacancy.questions : [];
@@ -117,7 +119,7 @@ Deno.serve(safe(async (req: Request) => {
     // An interrupted response can hide a successful database commit. In that
     // ambiguous case preserve the files; an operator can reconcile them later.
     cleanup = false;
-    const result = await db.rpc("recruitment_submit_guest_application", { p_vacancy:vacancyId, p_upload_id:uploadId, p_submission_id:submissionId, p_application:{full_name:input.full_name,email:input.email,phone:input.phone,consent:true,answers,cv_path:cv,passport_path:passport} });
+    const result = await db.rpc("recruitment_submit_guest_application", { p_vacancy:vacancyId, p_upload_id:uploadId, p_submission_id:submissionId, p_application:{full_name:input.full_name,email:input.email,phone:input.phone,consent:true,whatsapp_opt_in:input.whatsapp_opt_in===true,answers,cv_path:cv,passport_path:passport} });
     if (result.error) {
       // Log only the database error code: messages may include applicant data.
       const code = /^[A-Z0-9]{5}$/.test(result.error.code || "") ? result.error.code : "unknown";

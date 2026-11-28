@@ -67,6 +67,12 @@ async function inbound(value:any,message:any,config:any){
   const body=clean(message?.text?.body||"",4096);
   const inboundWrite=await db.from("whatsapp_messages").upsert({conversation_id:conversation.id,provider_message_id:messageId,direction:"inbound",message_type:clean(message?.type,40)||"unknown",body:body||null,status:"received",payload:{contact_name:clean(value?.contacts?.[0]?.profile?.name,160)||null}},{onConflict:"provider_message_id",ignoreDuplicates:true});
   if(inboundWrite.error) throw new Error("Inbound message could not be recorded");
+  if(message?.type==="text" && /^(stop|opt ?out|unsubscribe|cancel)$/i.test(body.trim())){
+    const updated=await db.from("recruitment_applications").update({whatsapp_opt_in_at:null}).eq("whatsapp_e164",phone);
+    if(updated.error) throw new Error("Recruitment WhatsApp preference could not be updated");
+    const cancelled=await db.from("communication_outbox").update({status:"cancelled"}).eq("channel","whatsapp").eq("recipient",phone).eq("status","queued").contains("metadata",{source:"recruitment_feedback"});
+    if(cancelled.error) throw new Error("Queued recruitment messages could not be cancelled");
+  }
   if(config.chatbot_enabled&&conversation.status!=="handoff"&&message?.type==="text"&&body){
     const reply=botReply(body,clean(config.chatbot_handoff_text,500)||"Thank you. A member of the AH Consult team will respond during office hours.");
     if(reply.kind==="optout"&&profile?.id){

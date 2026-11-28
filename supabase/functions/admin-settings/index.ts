@@ -4,7 +4,7 @@ import { encryptText, sha256Hex } from "../_shared/crypto.ts";
 import { loadProvider, testProvider } from "../_shared/pay.ts";
 const CONFIG_KEYS: Record<string, string[]> = { manual: ["bank_name", "account_name", "account_number"], monnify: ["contract_code", "base_url"], upperlink: ["merchant_id", "init_url", "verify_url", "verify_method", "auth_style", "auth_header", "redirect_url"] };
 const SECRET_KEYS: Record<string, string[]> = { manual: [], monnify: ["api_key", "secret_key"], upperlink: ["secret_key"] };
-const ROLES = ["administrator", "registrar", "finance", "academic", "operations", "tutor", "viewer"];
+const ROLES = ["administrator", "registrar", "finance", "academic", "hr", "operations", "tutor", "viewer"];
 Deno.serve(safe(async (req) => {
   const user = await userFrom(req); if (!user) return json({ error: "Please sign in again." }, 401);
   const db = admin();

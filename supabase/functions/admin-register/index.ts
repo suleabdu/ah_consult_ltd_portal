@@ -4,7 +4,7 @@ import { admin, clientIp, json, safe, withinRateLimit } from "../_shared/lib.ts"
 import { sha256Hex } from "../_shared/crypto.ts";
 import { kickSheetSync } from "../_shared/sync.ts";
 import { normalizeNigerianWhatsApp } from "../_shared/whatsapp.ts";
-const ROLE: Record<string, string> = { "Administrator": "administrator", "Registrar / Admissions": "registrar", "Finance / Accounts": "finance", "Academic Coordinator": "academic", "Operations": "operations", "Tutor / Lecturer": "tutor", "Other": "viewer" };
+const ROLE: Record<string, string> = { "Administrator": "administrator", "Registrar / Admissions": "registrar", "Finance / Accounts": "finance", "Academic Coordinator": "academic", "Human Resources": "hr", "Operations": "operations", "Tutor / Lecturer": "tutor", "Other": "viewer" };
 Deno.serve(safe(async (req) => {
   const { fullName, email, phone, whatsappConsent, position, password, inviteCode } = await req.json();
   const role = ROLE[String(position ?? "")] ?? "viewer", db = admin(), typed = String(inviteCode ?? "").trim(), hash = await sha256Hex(typed);

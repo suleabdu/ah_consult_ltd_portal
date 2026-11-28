@@ -17,7 +17,8 @@ async function sendEmail(job:any) {
   if (!key || !from) throw new Error("Email provider is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL.");
   const action = job.metadata?.action_url ? `<p><a href="${escapeHtml(job.metadata.action_url)}">Open AH Student Hub</a></p>` : "";
   const html = `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2>${escapeHtml(job.subject ?? "AH Student Hub")}</h2><p>${escapeHtml(job.message).replace(/\n/g,"<br>")}</p>${action}<hr><small>AH Consult Ltd · AH Student Hub</small></div>`;
-  const r = await fetch("https://api.resend.com/emails", { method:"POST", headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"}, body:JSON.stringify({from,to:[job.recipient],subject:job.subject ?? "AH Student Hub",html}) });
+  const copies=job.metadata?.source==="recruitment_feedback"?{cc:job.metadata?.cc||[],bcc:job.metadata?.bcc||[]}:{ };
+  const r = await fetch("https://api.resend.com/emails", { method:"POST", headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"}, body:JSON.stringify({from,to:[job.recipient],...copies,subject:job.subject ?? "AH Student Hub",html}) });
   const data = await r.json().catch(()=>({}));
   if (!r.ok) throw new Error(`Email provider ${r.status}: ${data?.message ?? "request failed"}`);
   return {provider:"resend",id:data?.id ?? null};
@@ -40,10 +41,10 @@ async function loadWhatsAppProvider():Promise<WhatsAppProvider|null> {
   };
 }
 
-async function customerWindowOpen(conversationId:string):Promise<boolean> {
+async function customerWindowOpen(conversationId:string,phone:string):Promise<boolean> {
   if(!/^[0-9a-f-]{36}$/i.test(conversationId)) return false;
-  const {data,error}=await db.from("whatsapp_conversations").select("last_inbound_at,status").eq("id",conversationId).maybeSingle();
-  if(error||!data||!["bot","handoff"].includes(data.status)) return false;
+  const {data,error}=await db.from("whatsapp_conversations").select("last_inbound_at,status,phone_e164").eq("id",conversationId).maybeSingle();
+  if(error||!data||!["bot","handoff"].includes(data.status)||normalizeWhatsAppE164(data.phone_e164)!==phone) return false;
   const inbound=data.last_inbound_at?new Date(data.last_inbound_at).getTime():0;
   return Number.isFinite(inbound) && Date.now()-inbound<=24*60*60*1000;
 }
@@ -59,6 +60,11 @@ async function assertWhatsAppConsent(job:any,phone:string) {
     && typeof metadata.inbound_message_id==="string" && metadata.inbound_message_id.length>0
     && /^[0-9a-f-]{36}$/i.test(String(metadata.conversation_id||""));
   if(isInboundChatbotReply) return;
+  if(kind==="recruitment") {
+    const {data:application,error}=await db.from("recruitment_applications").select("whatsapp_e164,whatsapp_opt_in_at").eq("id",String(metadata.application_id||"")).maybeSingle();
+    if(error||!application?.whatsapp_opt_in_at||normalizeWhatsAppE164(application.whatsapp_e164)!==phone) throw new Error("The applicant has not opted in to WhatsApp delivery.");
+    return;
+  }
   if(kind==="staff") {
     const {data:staff}=await db.from("staff").select("whatsapp_e164,whatsapp_opt_in_at,status").eq("id",job.user_id).maybeSingle();
     if(!staff||staff.status!=="approved"||!staff.whatsapp_opt_in_at||normalizeWhatsAppE164(staff.whatsapp_e164)!==phone) throw new Error("The staff recipient has not opted in to WhatsApp delivery.");
@@ -84,7 +90,7 @@ async function sendWhatsApp(job:any) {
     templateLanguage=normalizeTemplateLanguage(metadata.template_language||provider.default_template_language);
     if(!templateName||!templateLanguage) throw new Error("A valid approved WhatsApp template name and language are required for this message.");
   } else {
-    if(!await customerWindowOpen(String(metadata.conversation_id||""))) {
+    if(!await customerWindowOpen(String(metadata.conversation_id||""),phone)) {
       throw new Error("A free-form WhatsApp reply requires an open 24-hour customer-service window. Use an approved template instead.");
     }
     body=String(job.message||"").trim();
@@ -152,6 +158,22 @@ async function sendWebhook(job:any, channel:"sms") {
 
 function escapeHtml(v:any){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]!));}
 
+// Queued applicant messages must not outlive an approved deletion or opt-out.
+async function recruitmentFeedbackEligible(job:any):Promise<boolean> {
+  if(job.metadata?.source!=="recruitment_feedback") return true;
+  const applicationId=String(job.metadata.application_id||"");
+  if(!/^[0-9a-f-]{36}$/i.test(applicationId)) return false;
+  const [app,request,current]=await Promise.all([
+    db.from("recruitment_applications").select("email,whatsapp_e164,whatsapp_opt_in_at").eq("id",applicationId).maybeSingle(),
+    db.from("recruitment_deletion_requests").select("id").eq("application_id",applicationId).eq("status","approved").limit(1),
+    db.from("communication_outbox").select("status").eq("id",job.id).maybeSingle(),
+  ]);
+  if(app.error||request.error||current.error) throw new Error("Applicant communication status could not be checked.");
+  if(!app.data||request.data?.length||current.data?.status!=="processing") return false;
+  if(job.channel==="email") return String(app.data.email||"").trim().toLowerCase()===String(job.recipient||"").trim().toLowerCase();
+  return job.channel==="whatsapp"&&!!app.data.whatsapp_opt_in_at&&normalizeWhatsAppE164(app.data.whatsapp_e164)===normalizeWhatsAppE164(job.recipient);
+}
+
 Deno.serve(async (req)=>{
   if(req.method!=="POST") return json({error:"POST required"},405);
   const auth=req.headers.get("authorization")??"";
@@ -163,6 +185,10 @@ Deno.serve(async (req)=>{
   let sent=0,failed=0;
   for(const job of jobs??[]){
     try{
+      if(!await recruitmentFeedbackEligible(job)) {
+        await db.from("communication_outbox").update({status:"cancelled",locked_by:null,locked_at:null}).eq("id",job.id).eq("status","processing");
+        continue;
+      }
       let result:any;
       if(job.channel==="email") result=await sendEmail(job);
       else if(job.channel==="whatsapp") result=await sendWhatsApp(job);
